@@ -1,13 +1,18 @@
 '''
     Data Loading
 
-    This module downloads data from Kaggle and extracts it to the data directory.
+    This module downloads data from Kaggle competition 
+    'predict-energy-behavior-of-prosumers' and extracts it to data/raw directory.
+
+    Requirements:
+    - Kaggle API credentials (~/.kaggle/kaggle.json or environment variables)
+    - kaggle package installed (pip install kaggle)
 
     Input:
-    - public_url - Public URL of the data file
+    - Competition name: predict-energy-behavior-of-prosumers
 
     Output:
-    - Extracted CSV file(s) in data_dir
+    - Extracted CSV files in data/raw/
 
     Usage:
     python -m src.preds.data_loading
@@ -16,11 +21,9 @@
 # ----------- Imports ----------- #
 import os
 import gc
-import io
-import zipfile
-import requests
-from dotenv import load_dotenv
+import subprocess
 from pathlib import Path
+from dotenv import load_dotenv
 
 from src.logging_setup import setup_logging
 
@@ -28,118 +31,177 @@ from src.logging_setup import setup_logging
 logger = setup_logging('data_loading')
 
 # ---------- Config ---------- #
-# Load environment variables
 load_dotenv()
-# Set working directory to project root
-PROJECT_ROOT = Path(__file__).parent.parent.parent  # src/recs -> src -> project_root
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 os.chdir(PROJECT_ROOT)
 
 # ---------- Constants ---------- #
-# Data directory
-DATA_DIR = os.getenv('DATA_DIR', './data')
-# Public URL of the data file on Yandex.Disk
-PUBLIC_URL = os.getenv('YADISK_PUBLIC_URL', 'https://disk.yandex.com/d/Io0siOESo2RAaA')
-# Yandex.Disk API endpoint for getting download links
-YADISK_API_URL = os.getenv('YADISK_URL', 'https://cloud-api.yandex.net/v1/disk/public/resources/download')
+# Competition name on Kaggle
+COMPETITION_NAME = 'predict-energy-behavior-of-prosumers'
+# Data directory for raw data
+RAW_DATA_DIR = os.getenv('RAW_DATA_DIR', './data/raw')
+
+# Expected data files from the competition
+EXPECTED_FILES = [
+    'train.csv',
+    'client.csv', 
+    'electricity_prices.csv',
+    'gas_prices.csv',
+    'historical_weather.csv',
+    'forecast_weather.csv',
+    'weather_station_to_county_mapping.csv'
+]
 
 
 # ---------- Functions ---------- #
-def get_yadisk_direct_link(
-    public_url: str
-) -> str:
+def check_kaggle_credentials() -> bool:
     '''
-        Convert a public Yandex.Disk URL to a direct download link.
-        Uses Yandex.Disk public API to get the download href.
+        Check if Kaggle API credentials are available.
+        Returns True if credentials are found, False otherwise.
     '''
-
-    params = {"public_key": public_url}
-    resp = requests.get(YADISK_API_URL, params=params)
-    resp.raise_for_status()
-    href = resp.json().get("href")
-    if not href:
-        raise RuntimeError(f"Could not get direct link for: {public_url}")
-    logger.info(f'Direct link obtained for Yandex.Disk resource')
-
-    return href
-
-def download_yadisk_file(
-    public_url: str
-) -> bytes:
-    '''
-    Download file content from a Yandex.Disk public URL and return raw bytes.
-    '''
-
-    direct_link = get_yadisk_direct_link(public_url)
-    resp = requests.get(direct_link, stream=True)
-    resp.raise_for_status()
-    logger.info(f'File content downloaded from {public_url}')
+    # Check for kaggle.json file
+    kaggle_json = Path.home() / '.kaggle' / 'kaggle.json'
+    if kaggle_json.exists():
+        logger.info('Kaggle credentials found at ~/.kaggle/kaggle.json')
+        return True
     
-    return resp.content
+    # Check for environment variables
+    if os.getenv('KAGGLE_USERNAME') and os.getenv('KAGGLE_KEY'):
+        logger.info('Kaggle credentials found in environment variables')
+        return True
+    
+    logger.warning('Kaggle credentials not found')
+    return False
 
-def download_and_extract(
-    public_url: str,
-    data_dir: str = DATA_DIR
+
+def download_from_kaggle(
+    competition: str = COMPETITION_NAME,
+    output_dir: str = RAW_DATA_DIR
 ) -> None:
     '''
-        Download dataset from Yandex.Disk and extract to data directory.
+        Download competition data from Kaggle using the Kaggle API.
         
-        Supports:
-        - Plain CSV files (saved directly)
-        - ZIP archives (extracted to data_dir)
+        Args:
+            competition: Kaggle competition name
+            output_dir: Directory to save downloaded files
     '''
-    # Ensure data directory exists
-    data_path = Path(data_dir)
-    data_path.mkdir(parents=True, exist_ok=True)
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
     
-    raw = download_yadisk_file(public_url)
-    extracted_files = []
+    logger.info(f'Downloading data from Kaggle competition: {competition}')
+    logger.info(f'Output directory: {output_path.absolute()}')
+    
+    try:
+        # Use kaggle CLI to download competition data
+        cmd = [
+            'kaggle', 'competitions', 'download',
+            '-c', competition,
+            '-p', str(output_path),
+            '--force'  # Overwrite existing files
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        logger.info(f'Kaggle download output: {result.stdout}')
+        
+        # Extract zip file if downloaded
+        zip_file = output_path / f'{competition}.zip'
+        if zip_file.exists():
+            logger.info(f'Extracting {zip_file}')
+            import zipfile
+            with zipfile.ZipFile(zip_file, 'r') as zf:
+                zf.extractall(output_path)
+            
+            # Remove zip file after extraction
+            zip_file.unlink()
+            logger.info('Zip file extracted and removed')
+        
+        logger.info('DONE: Kaggle data download completed')
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f'Kaggle download failed: {e.stderr}')
+        raise RuntimeError(f'Failed to download from Kaggle: {e.stderr}')
+    except FileNotFoundError:
+        logger.error('Kaggle CLI not found. Install with: pip install kaggle')
+        raise RuntimeError('Kaggle CLI not installed')
 
-    # Check if it's a ZIP file
-    if raw[:4] == b'PK\x03\x04':
-        logger.info('ZIP archive detected')
-        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            # Extract all files
-            for file_name in zf.namelist():
-                # Skip directories and hidden files
-                if file_name.endswith('/') or file_name.startswith('__'):
-                    continue
-                
-                # Extract file
-                target_path = data_path / Path(file_name).name
-                with zf.open(file_name) as src, open(target_path, 'wb') as dst:
-                    dst.write(src.read())
-                
-                extracted_files.append(str(target_path))
-                logger.info(f'Data extracted to: {target_path}')
-    else:
-        # Assume it's a plain CSV file
-        logger.info('Plain file detected')
-        target_path = data_path / 'train_ver2.csv'
-        with open(target_path, 'wb') as f:
-            f.write(raw)
-        extracted_files.append(str(target_path))
-        logger.info(f'File saved to: {target_path}')
 
-    logger.info(f'DONE: Data download completed')
+def verify_downloaded_files(
+    data_dir: str = RAW_DATA_DIR,
+    expected_files: list = EXPECTED_FILES
+) -> bool:
+    '''
+        Verify that all expected files were downloaded.
+        
+        Returns True if all files exist, False otherwise.
+    '''
+    data_path = Path(data_dir)
+    missing_files = []
+    
+    for file_name in expected_files:
+        file_path = data_path / file_name
+        if not file_path.exists():
+            missing_files.append(file_name)
+        else:
+            # Log file size
+            size_mb = file_path.stat().st_size / (1024 * 1024)
+            logger.info(f'Found: {file_name} ({size_mb:.2f} MB)')
+    
+    if missing_files:
+        logger.warning(f'Missing files: {missing_files}')
+        return False
+    
+    logger.info('DONE: All expected files verified')
+    return True
 
-    del raw, extracted_files
-    gc.collect()
 
-    return None
-
-def run_data_loading() -> None:
+def run_data_loading(
+    competition: str = COMPETITION_NAME,
+    output_dir: str = RAW_DATA_DIR,
+    skip_if_exists: bool = True
+) -> None:
     '''
         Run data loading pipeline.
-        Downloads data from Yandex.Disk and extracts to DATA_DIR.
+        
+        Downloads competition data from Kaggle and verifies all files are present.
+        
+        Args:
+            competition: Kaggle competition name
+            output_dir: Directory to save downloaded files
+            skip_if_exists: Skip download if all files already exist
     '''
     logger.info('Starting data loading pipeline')
-    if not PUBLIC_URL:
-        raise ValueError(
-            "YADISK_PUBLIC_URL environment variable is not set. "
-            "Please set it in your .env file or environment."
+    
+    # Check if files already exist
+    if skip_if_exists and verify_downloaded_files(output_dir):
+        logger.info('All data files already exist, skipping download')
+        return
+    
+    # Check credentials
+    if not check_kaggle_credentials():
+        raise RuntimeError(
+            'Kaggle credentials not found. Please either:\n'
+            '1. Create ~/.kaggle/kaggle.json with your API credentials, or\n'
+            '2. Set KAGGLE_USERNAME and KAGGLE_KEY environment variables\n'
+            'Get your API key from: https://www.kaggle.com/settings'
         )
-    download_and_extract(PUBLIC_URL, DATA_DIR)
+    
+    # Download data
+    download_from_kaggle(competition, output_dir)
+    
+    # Verify download
+    if not verify_downloaded_files(output_dir):
+        raise RuntimeError('Downloaded files verification failed')
+    
     logger.info('Data loading pipeline completed successfully')
+    
+    gc.collect()
 
 
 # ---------- Main function ---------- #
@@ -148,4 +210,4 @@ if __name__ == '__main__':
 
 
 # ---------- All exports ---------- #
-__all__ = ['run_data_loading']
+__all__ = ['run_data_loading', 'download_from_kaggle', 'verify_downloaded_files']

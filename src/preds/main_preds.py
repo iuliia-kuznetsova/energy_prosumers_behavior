@@ -1,13 +1,24 @@
 '''
-    CLI entry point for energy prosumers behavior prediction system.
+    Main Orchestrator for Energy Prosumers Behavior Prediction
 
-    Usage examples:
-        python -m src.preds.main_preds                   # run full pipeline
-        python -m src.preds.main_preds --skip-download   # skip raw data download if already present
-    
-    Memory optimization:
-        - Explicit gc.collect() calls after each pipeline step to free intermediate data
-        - Training data cleaned up after modelling completes
+    This module provides the main entry point for running the complete
+    prediction pipeline from data loading to model training and evaluation.
+
+    Pipeline Steps:
+    1. Load environment variables and create directories
+    2. Download raw data from Kaggle (if needed)
+    3. Preprocess data (schema validation, type conversion)
+    4. Merge all datasets into unified DataFrame
+    5. Engineer features (datetime, calendar, lags)
+    6. Train CatBoost models (consumption & production)
+    7. Evaluate model performance
+    8. Save trained models
+
+    Usage:
+        python -m src.preds.main_preds                    # Full pipeline
+        python -m src.preds.main_preds --skip-download    # Skip Kaggle download
+        python -m src.preds.main_preds --skip-training    # Skip model training
+        python -m src.preds.main_preds --n-trials 20      # Custom Optuna trials
 '''
 
 # ---------- Imports ---------- #
@@ -16,293 +27,266 @@ import sys
 import gc
 import argparse
 import traceback
-from dotenv import load_dotenv
 from pathlib import Path
+from dotenv import load_dotenv
 
 from src.logging_setup import setup_logging
-from src.preds.data_loading import run_data_loading
-from src.preds.data_preprocessing import run_preprocessing
-from src.preds.feature_engineering import run_feature_engineering
-from src.preds.train_test_split import run_train_test_split
-from src.preds.modelling import run_modelling
-from src.preds.evaluation import run_evaluation
-from src.preds.predictions import run_predictions
-from src.preds.mlflow_logging import log_saved_model_to_mlflow
-
-
-# ---------- Memory Helper ---------- #
-def log_memory_cleanup(logger, step_name: str):
-    '''
-        Force garbage collection and log memory cleanup after a pipeline step
-    '''
-    collected = gc.collect()
-    logger.info(f'Memory cleanup after {step_name} completed')
+from src.preds.data_loading import run_data_loading, verify_downloaded_files
+from src.preds.data_preprocessing import DataPreparation, load_raw_data
+from src.preds.data_merging import DataMerging
+from src.preds.feature_engineering import FeatureEngineering
+from src.preds.modelling_catboost import CatBoostRegressorModel, run_modelling
 
 
 # ---------- Logging setup ---------- #
-logger = setup_logging('main_recs')
+logger = setup_logging('main_preds')
+
+
+# ---------- Config ---------- #
+load_dotenv()
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+os.chdir(PROJECT_ROOT)
+
+
+# ---------- Constants ---------- #
+RAW_DATA_DIR = os.getenv('RAW_DATA_DIR', './data/raw')
+PROCESSED_DATA_DIR = os.getenv('PROCESSED_DATA_DIR', './data/processed')
+MODELS_DIR = os.getenv('MODELS_DIR', './models')
+RESULTS_DIR = os.getenv('RESULTS_DIR', './results')
+
+
+# ---------- Memory Helper ---------- #
+def log_memory_cleanup(step_name: str) -> None:
+    '''Force garbage collection and log cleanup'''
+    collected = gc.collect()
+    logger.info(f'Memory cleanup after {step_name}: {collected} objects collected')
 
 
 # ---------- Argument Parser ---------- #
-def parse_args():
-    '''
-        Parse command line arguments
-    '''
+def parse_args() -> argparse.Namespace:
+    '''Parse command line arguments'''
     parser = argparse.ArgumentParser(
-            description='Energy Prosumers Behavior Prediction System Pipeline'
+        description='Energy Prosumers Behavior Prediction Pipeline'
     )
     parser.add_argument(
         '--skip-download',
         action='store_true',
-        help='Skip raw data download if already present'
+        help='Skip Kaggle data download if data already exists'
     )
     parser.add_argument(
-        '--skip-modelling',
+        '--skip-training',
         action='store_true',
-        help='Skip model training'
+        help='Skip model training (load existing model)'
+    )
+    parser.add_argument(
+        '--n-trials',
+        type=int,
+        default=10,
+        help='Number of Optuna hyperparameter optimization trials (default: 10)'
+    )
+    parser.add_argument(
+        '--model-name',
+        type=str,
+        default='catboost_prosumer',
+        help='Name for saved model (default: catboost_prosumer)'
     )
     return parser.parse_args()
 
 
-# ---------- Main pipeline---------- #
-def main(args):
+# ---------- Pipeline Functions ---------- #
+def run_full_pipeline(args: argparse.Namespace) -> None:
     '''
-        Main entry point: 
-        1. Load environment variables
-        2. Download raw data (if needed)
-        3. Preprocess data
-        4. Feature engineering
-        5. Split data into train/test sets
-        6. Train models
-        7. Evaluate models
-        8. Generate predictions
-        9. Log model to MLflow
-    '''
-    
-    # ---------- Step 1: Load environment variables ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 1: Loading environment variables')
-    print('='*80)
-    
-    load_dotenv()
-
-    DATA_DIR = os.getenv('DATA_DIR', './data')
-    MODELS_DIR = os.getenv('MODELS_DIR', './models')
-    RESULTS_DIR = os.getenv('RESULTS_DIR', './results')
-    RAW_DATA_FILE = os.getenv('RAW_DATA_FILE', 'train_ver2.csv')
-    PREPROCESSED_DATA_FILE = os.getenv('PREPROCESSED_DATA_FILE', 'data_preprocessed.parquet')
-    
-    # Create directories if they don't exist
-    Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
-    Path(MODELS_DIR).mkdir(parents=True, exist_ok=True)
-    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
-
-    logger.info('DONE: Loading environment variables completed successfully')
-    logger.info(f'INFO: Data directory: {DATA_DIR}')
-    logger.info(f'INFO: Models directory: {MODELS_DIR}')
-    logger.info(f'INFO: Results directory: {RESULTS_DIR}')
-    logger.info(f'STEP 1 DONE')
-    
-    # ---------- Step 2: Download raw data (if not skipped) ---------- #
-    if not args.skip_download:
-        print('\n' + '='*80)
-        logger.info('STEP 2: Downloading raw data')
-        print('='*80)
+        Run the complete prediction pipeline.
         
-        try:
-            run_data_loading()
-            log_memory_cleanup(logger, 'data_loading')
-            logger.info('STEP 2 DONE')
-        except Exception as e:
-            logger.error(f'ERROR: Failed to download raw data: {e}')
+        Steps:
+        1. Setup directories
+        2. Download data (optional)
+        3. Preprocess data
+        4. Merge datasets
+        5. Engineer features
+        6. Train models
+        7. Evaluate performance
+    '''
+    
+    # ========== STEP 1: Setup ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 1: Setting up directories')
+    print('=' * 80)
+    
+    # Create directories
+    for dir_path in [RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR, RESULTS_DIR]:
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
+        logger.info(f'Directory ready: {dir_path}')
+    
+    logger.info('STEP 1 DONE: Setup completed')
+    
+    # ========== STEP 2: Download Data ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 2: Data Loading')
+    print('=' * 80)
+    
+    if args.skip_download:
+        logger.info('Skipping download (--skip-download flag)')
+        if not verify_downloaded_files(RAW_DATA_DIR):
+            logger.error('Required data files not found. Remove --skip-download flag.')
             sys.exit(1)
     else:
-        print('\n' + '='*80)
-        logger.info('STEP 2: Skipping raw data download (--skip-download flag)')
-        print('='*80)
-        
-        raw_data_path = os.path.join(DATA_DIR, RAW_DATA_FILE)
-        if not os.path.exists(raw_data_path):
-            logger.error(f'ERROR: Missing raw data file: {raw_data_path}')
-            logger.info(f'INFO: Run without --skip-download to download raw data')
+        try:
+            run_data_loading(skip_if_exists=True)
+        except Exception as e:
+            logger.error(f'Data loading failed: {e}')
+            traceback.print_exc()
             sys.exit(1)
-        
-        logger.info('STEP 2 DONE')
     
-    # ---------- Step 3: Run preprocessing pipeline ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 3: Preprocessing data')
-    print('='*80)
+    log_memory_cleanup('data_loading')
+    logger.info('STEP 2 DONE: Data loading completed')
+    
+    # ========== STEP 3: Preprocess Data ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 3: Data Preprocessing')
+    print('=' * 80)
     
     try:
-        run_preprocessing()
+        raw_data = load_raw_data(RAW_DATA_DIR)
+        preprocessor = DataPreparation(mode='train')
+        processed_data = preprocessor.fit_transform(raw_data)
         
-        # Verify that the required preprocessed data file exists
-        if PREPROCESSED_DATA_FILE not in os.listdir(DATA_DIR):
-            logger.error(f'ERROR: Missing preprocessed data file: {DATA_DIR}/{PREPROCESSED_DATA_FILE}')
+        del raw_data
+        log_memory_cleanup('preprocessing')
+        logger.info('STEP 3 DONE: Data preprocessing completed')
+        
+    except Exception as e:
+        logger.error(f'Preprocessing failed: {e}')
+        traceback.print_exc()
+        sys.exit(1)
+    
+    # ========== STEP 4: Merge Data ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 4: Data Merging')
+    print('=' * 80)
+    
+    try:
+        merger = DataMerging(mode='train')
+        merged_df = merger.fit_transform(processed_data)
+        
+        del processed_data
+        log_memory_cleanup('merging')
+        logger.info('STEP 4 DONE: Data merging completed')
+        
+    except Exception as e:
+        logger.error(f'Data merging failed: {e}')
+        traceback.print_exc()
+        sys.exit(1)
+    
+    # ========== STEP 5: Feature Engineering ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 5: Feature Engineering')
+    print('=' * 80)
+    
+    try:
+        engineer = FeatureEngineering(mode='train')
+        train_df = engineer.fit_transform(merged_df)
+        
+        # Save train_df for later use
+        train_df.to_parquet(Path(PROCESSED_DATA_DIR) / 'train_features.parquet')
+        logger.info(f'Features saved: {train_df.shape}')
+        
+        del merged_df
+        log_memory_cleanup('feature_engineering')
+        logger.info('STEP 5 DONE: Feature engineering completed')
+        
+    except Exception as e:
+        logger.error(f'Feature engineering failed: {e}')
+        traceback.print_exc()
+        sys.exit(1)
+    
+    # ========== STEP 6: Model Training ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 6: Model Training')
+    print('=' * 80)
+    
+    if args.skip_training:
+        logger.info('Skipping training (--skip-training flag)')
+        try:
+            model = CatBoostRegressorModel()
+            model.load(model_name=args.model_name)
+        except FileNotFoundError:
+            logger.error(f'Model not found: {args.model_name}. Remove --skip-training flag.')
             sys.exit(1)
-        
-        log_memory_cleanup(logger, 'preprocessing')
-        logger.info('STEP 3 DONE')
-        
-    except Exception as e:
-        logger.error(f'ERROR: Preprocessing failed: {e}')
-        traceback.print_exc()
-        sys.exit(1)
-    
-    # ---------- Step 4: Feature Engineering ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 4: Feature Engineering')
-    print('='*80)
-    
-    try:
-        run_feature_engineering()
-        log_memory_cleanup(logger, 'feature_engineering')
-        logger.info('STEP 4 DONE')
-        
-    except Exception as e:
-        logger.error(f'ERROR: Feature engineering failed: {e}')
-        traceback.print_exc()
-        sys.exit(1)
-    
-    # ---------- Step 5: Split data into train/test sets ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 5: Splitting data into train/test sets')
-    print('='*80)
-    
-    try:
-        run_train_test_split()
-
-        # Verify that all needed train/test split files exist
-        train_test_split_files = ['X_train.parquet', 'X_test.parquet', 'y_train.parquet', 'y_test.parquet']
-        missing_train_test_split_files = [f for f in train_test_split_files if not os.path.exists(os.path.join(DATA_DIR, f))]
-        
-        if missing_train_test_split_files:
-            logger.error(f'ERROR: Missing train/test split files: {missing_train_test_split_files}')
-            logger.info('INFO: Check train/test split pipeline to generate train/test split data')
+    else:
+        try:
+            model = CatBoostRegressorModel(n_trials=args.n_trials)
+            model.fit(train_df)
+            model.save(args.model_name)
+            
+            log_memory_cleanup('training')
+            logger.info('STEP 6 DONE: Model training completed')
+            
+        except Exception as e:
+            logger.error(f'Model training failed: {e}')
+            traceback.print_exc()
             sys.exit(1)
-        
-        log_memory_cleanup(logger, 'train_test_split')
-        logger.info('STEP 5 DONE')
-
-    except Exception as e:
-        logger.error(f'ERROR: Splitting data into train/test sets failed: {e}')
-        traceback.print_exc()
-        sys.exit(1)
-
-    # Skip modelling if flag is set
-    if args.skip_modelling:
-        print('\n' + '='*80)
-        logger.info('STEP 7-9: Skipping modelling (--skip-modelling flag)')
-        print('='*80)
-        logger.info('Pipeline completed (modelling skipped)')
-        return
-
-    # ---------- Step 6: Modelling ---------- #     
-    print('\n' + '='*80)
-    logger.info('STEP 6: Modelling')
-    print('='*80)
+    
+    # ========== STEP 7: Evaluation ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 7: Model Evaluation')
+    print('=' * 80)
     
     try:
-        # Load training data
-        X_train, X_test, y_train, y_test = load_training_data(DATA_DIR)
-        target_names = get_product_names(y_train)
+        mae = model.compute_mae_power(train_df)
+        logger.info(f'Train MAE (Power): {mae:.4f}')
         
-        # Detect categorical features
-        cat_features = [
-            col for col in X_train.columns
-            if X_train[col].dtype == 'category' or X_train[col].dtype == 'object'
-        ]
+        # Save evaluation results
+        results = {
+            'train_mae_power': mae,
+            'model_name': args.model_name,
+            'n_trials': args.n_trials,
+            'n_samples': len(train_df)
+        }
         
-        # Initialize and train model
-        model = OvRGroupModel(
-            cat_features=cat_features,
-            models_dir=MODELS_DIR,
-            results_dir=RESULTS_DIR,
-            data_dir=DATA_DIR
-        )
-        model.fit(
-            X_train, y_train,
-            X_val=X_test, y_val=y_test,
-            target_names=target_names
-        )
+        import json
+        results_path = Path(RESULTS_DIR) / 'evaluation_results.json'
+        with open(results_path, 'w') as f:
+            json.dump(results, f, indent=2)
+        logger.info(f'Evaluation results saved to {results_path}')
         
-        # Free training data memory after model fitting (keep X_test, y_test for evaluation)
-        del X_train, y_train
-        log_memory_cleanup(logger, 'model_training')
-        logger.info('STEP 7 DONE')
-
+        log_memory_cleanup('evaluation')
+        logger.info('STEP 7 DONE: Evaluation completed')
+        
     except Exception as e:
-        logger.error(f'ERROR: Modelling OvR Grouped CatBoost failed: {e}')
-        traceback.print_exc()
-        sys.exit(1)
-
-    # ---------- Step 7: Evaluation ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 7: Evaluating')
-    print('='*80)
-    
-    try:
-        results = model.evaluate(X_test, y_test)
-        logger.info(f"Mean AUC: {results['overall']['mean_auc']:.4f}")
-        log_memory_cleanup(logger, 'evaluation')
-        logger.info('STEP 7 DONE')
-    except Exception as e:
-        logger.error(f'ERROR: Evaluating OvR Grouped CatBoost failed: {e}')
-        traceback.print_exc()
-        sys.exit(1)
-
-    # ---------- Step 8: Generate Predictions & Save ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 8: Generating predictions, saving and logging model')
-    print('='*80)
-    
-    try:
-        # Generate predictions (use small subset to save memory)
-        X_test_sample = X_test.head(100)
-        predictions = model.predict(X_test_sample)
-        logger.info(f'Generated predictions for {len(predictions)} customers')
-        
-        # Save model
-        model_path = model.save('ovr_grouped_catboost')
-        # Final cleanup: free test data and model from memory
-        del X_test, y_test, X_test_sample, predictions, model
-        log_memory_cleanup(logger, 'final_cleanup')
-        logger.info(f'Model saved to: {model_path}')
-        logger.info('STEP 8 DONE')
-    except Exception as e:
-        logger.error(f'ERROR: Generating predictions failed: {e}')
+        logger.error(f'Evaluation failed: {e}')
         traceback.print_exc()
         sys.exit(1)
     
-    # ---------- Step 9: Log model to MLflow ---------- #
-    print('\n' + '='*80)
-    logger.info('STEP 9: Logging model to MLflow')
-    print('='*80)
-    try:
-        log_saved_model_to_mlflow(
-            model_path='models/ovr_grouped_catboost',
-            X_sample_path='data/X_test.parquet',
-            experiment_name='energy_prosumers_behavior_prediction',
-            run_name=None,
-            registry_model_name='ovr_grouped_catboost'
-        )
-        logger.info('Model logged to MLflow')
-        logger.info('STEP 9 DONE')
-    except Exception as e:
-        logger.error(f'ERROR: Logging model to MLflow failed: {e}')
-        traceback.print_exc()
-        sys.exit(1)
-
-
-    logger.info('Pipeline completed successfully!')
+    # ========== DONE ==========
+    print('\n' + '=' * 80)
+    logger.info('PIPELINE COMPLETED SUCCESSFULLY!')
+    print('=' * 80)
+    
+    logger.info(f'Model saved to: {MODELS_DIR}/{args.model_name}')
+    logger.info(f'Train MAE (Power): {mae:.4f}')
+    
+    # Final cleanup
+    del train_df, model
+    gc.collect()
 
 
 # ---------- Main function ---------- #
-if __name__ == '__main__':
+def main():
+    '''Main entry point'''
     args = parse_args()
-    main(args)
+    
+    logger.info('=' * 80)
+    logger.info('Energy Prosumers Behavior Prediction Pipeline')
+    logger.info('=' * 80)
+    logger.info(f'Arguments: {vars(args)}')
+    
+    run_full_pipeline(args)
 
 
+if __name__ == '__main__':
+    main()
 
 
+# ---------- All exports ---------- #
+__all__ = ['main', 'run_full_pipeline', 'parse_args']
