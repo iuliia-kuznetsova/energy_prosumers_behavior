@@ -1,0 +1,30 @@
+Predict Energy Behavior of Prosumers
+
+Built a pipeline with gradient boosting models that predicts hourly energy consumption and production for prosumer segments in Estonia, helping energy companies reduce imbalance costs.
+Solution to the Kaggle competition 'Enefit - Predict Energy Behavior of Prosumers' (https://www.kaggle.com/competitions/predict-energy-behavior-of-prosumers).
+I'm currently working on ensembling of the gradient boosting solution with neural network architecture (LSTM, TFT).
+
+Results:
+MAE: TBD
+
+Tech Stack:
+Python, CatBoost, Scikit-learn, Polars, Pandas, NumPy, Optuna, MLflow
+
+Approach:
+- data preprocessing with schema validation and type conversion across 7 datasets,
+- data merging of power, client, electricity/gas prices, and weather data via county mapping,
+- feature engineering of cyclical datetime encodings, Estonian holiday flags, DST shifts, and lag features (12 h, 24 h, 1 week, 30 days) for capacity factor, prices, and weather,
+- separate CatBoost regressors for consumption and production using capacity_factor as target,
+- hyperparameter optimization with Optuna and TimeSeriesSplit cross-validation (MAE loss),
+- recursive forecasting with lag feature updates for sequential prediction,
+- MLflow tracking of experiments and model versions.
+
+Pros of my solution:
+- separate models for consumption and production capture distinct behavioral patterns,
+- power normalization by installed capacity makes predictions comparable across prosumer segments of different sizes,
+- cyclical sin/cos encoding of time features preserves temporal continuity,
+- rich multi-source feature set (prices, weather forecasts, historical weather, calendar effects),
+- temporal cross-validation prevents data leakage from future observations,
+- modular sklearn-compatible pipeline with standalone transformers for each step,
+- recursive forecasting updates lag features row-by-row, matching real-world sequential deployment,
+- prediction speed up using vectorized batches, if recursive updates are not needed.

@@ -13,10 +13,13 @@ optuna==4.7.0
 # Feature engineering
 holidays==0.90
 
+# Logging
+python-json-logger==4.0.0
+
 # Data loading
 kaggle==1.8.3
 python-dotenv==1.2.1
 requests==2.32.5
-# Optional: for notebook development (may require Windows Long Paths enabled)
-# To enable: Run as Admin: New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-# jupyter>=1.0.0
+
+# Experiment tracking
+mlflow==2.10.0
