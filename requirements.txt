@@ -2,6 +2,7 @@
 
 # Data processing
 polars==1.37.1
+pyarrow==26.0.0
 pandas==3.0.0
 numpy==2.4.2
 

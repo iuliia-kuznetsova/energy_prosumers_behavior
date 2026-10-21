@@ -79,6 +79,8 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         self.power_schema = {
             'row_id': pl.Int32,
             'datetime': pl.Datetime,
+            # Daily batch. Later joins may use this batch or an earlier one, never a later one.
+            'data_block_id': pl.Int32,
             'prediction_unit_id': pl.Int16,
             'is_consumption': pl.Boolean,
             'county': pl.Int8,
@@ -89,6 +91,8 @@ class DataPreparation(BaseEstimator, TransformerMixin):
 
         self.client_schema = {
             'date': pl.Date,
+            # Same batch id as the target day that is allowed to see this client row.
+            'data_block_id': pl.Int32,
             'county': pl.Int8,
             'is_business': pl.Boolean,
             'product_type': pl.Int8,
@@ -97,11 +101,15 @@ class DataPreparation(BaseEstimator, TransformerMixin):
 
         self.electricity_schema = {
             'forecast_date': pl.Datetime,
+            # Batch in which this price hour was revealed.
+            'data_block_id': pl.Int32,
             'euros_per_mwh': pl.Float64
         }
 
         self.gas_schema = {
             'forecast_date': pl.Datetime,
+            # Batch in which this daily gas price was revealed.
+            'data_block_id': pl.Int32,
             'lowest_price_per_mwh': pl.Float64,
             'highest_price_per_mwh': pl.Float64
         }
@@ -109,6 +117,8 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         self.forecast_weather_schema = {
             'latitude': pl.Float32,
             'longitude': pl.Float32,
+            # Batch of the forecast issue. Used to keep the day-ahead issue only.
+            'data_block_id': pl.Int32,
             'forecast_datetime': pl.Datetime,
             'hours_ahead': pl.Int8,
             'temperature': pl.Float32,
@@ -122,6 +132,8 @@ class DataPreparation(BaseEstimator, TransformerMixin):
 
         self.historical_weather_schema = {
             'datetime': pl.Datetime,
+            # Float in the CSV; the cast below turns it into the integer batch id.
+            'data_block_id': pl.Int32,
             'latitude': pl.Float32,
             'longitude': pl.Float32,
             'temperature': pl.Float32,
@@ -171,7 +183,10 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         
         self.power_df = self._check_columns(
             self.power_df, 
-            ['row_id', 'datetime', 'prediction_unit_id', 'is_consumption', 
+            ['row_id', 'datetime',
+             # Required so every later row can be tied to the batch it was scored in.
+             'data_block_id',
+             'prediction_unit_id', 'is_consumption', 
              'county', 'is_business', 'product_type', 'target']
         )
         
@@ -190,7 +205,10 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         # Client DataFrame
         self.client_df = self._check_columns(
             self.client_df, 
-            ['date', 'county', 'is_business', 'product_type', 'installed_capacity']
+            ['date',
+             # Kept so the capacity join can be checked against the target batch.
+             'data_block_id',
+             'county', 'is_business', 'product_type', 'installed_capacity']
         )
         
         self.client_df = (
@@ -208,7 +226,10 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         # Electricity DataFrame
         self.electricity_df = self._check_columns(
             self.electricity_df, 
-            ['forecast_date', 'euros_per_mwh']
+            ['forecast_date',
+             # Kept so a price can be rejected when its batch is newer than the target.
+             'data_block_id',
+             'euros_per_mwh']
         )
         
         self.electricity_df = (
@@ -226,7 +247,10 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         # Gas DataFrame
         self.gas_df = self._check_columns(
             self.gas_df, 
-            ['forecast_date', 'lowest_price_per_mwh', 'highest_price_per_mwh']
+            ['forecast_date',
+             # Kept so the daily gas price can be tied to the batch that revealed it.
+             'data_block_id',
+             'lowest_price_per_mwh', 'highest_price_per_mwh']
         )
         
         self.gas_df = (
@@ -244,7 +268,10 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         # Forecast Weather DataFrame
         self.forecast_weather_df = self._check_columns(
             self.forecast_weather_df, 
-            ['latitude', 'longitude', 'forecast_datetime', 'hours_ahead', 
+            ['latitude', 'longitude',
+             # Required to select the forecast issue that belongs to the target batch.
+             'data_block_id',
+             'forecast_datetime', 'hours_ahead', 
              'temperature', 'cloudcover_total', 'total_precipitation', 
              '10_metre_u_wind_component', '10_metre_v_wind_component', 
              'direct_solar_radiation', 'surface_solar_radiation_downwards']
@@ -265,7 +292,10 @@ class DataPreparation(BaseEstimator, TransformerMixin):
         # Historical Weather DataFrame
         self.historical_weather_df = self._check_columns(
             self.historical_weather_df, 
-            ['datetime', 'latitude', 'longitude', 
+            ['datetime',
+             # Required so observed weather can be checked to be from this batch or older.
+             'data_block_id',
+             'latitude', 'longitude', 
              'temperature', 'surface_pressure', 'rain', 'snowfall', 
              'cloudcover_total', 'windspeed_10m', 'winddirection_10m', 
              'direct_solar_radiation', 'diffuse_radiation']

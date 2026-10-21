@@ -11,7 +11,7 @@
     4. Merge all datasets into unified DataFrame
     5. Engineer features (datetime, calendar, lags)
     6. Train CatBoost models (consumption & production)
-    7. Evaluate model performance
+    7. Evaluate on the holdout months the model did not train on
     8. Save trained models
 
     Usage:
@@ -90,6 +90,16 @@ def parse_args() -> argparse.Namespace:
         default='catboost_prosumer',
         help='Name for saved model (default: catboost_prosumer)'
     )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Train and predict only prediction_unit_id 0, 1, 20 and 100'
+    )
+    parser.add_argument(
+        '--no-scale-trees',
+        action='store_true',
+        help='Keep the early-stopping tree count instead of scaling it to the full training set'
+    )
     return parser.parse_args()
 
 
@@ -105,7 +115,7 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
         4. Merge datasets
         5. Engineer features
         6. Train models
-        7. Evaluate performance
+        7. Report the holdout power MAE
     '''
     
     # ========== STEP 1: Setup ==========
@@ -208,14 +218,21 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
     if args.skip_training:
         logger.info('Skipping training (--skip-training flag)')
         try:
-            model = CatBoostRegressorModel()
+            model = CatBoostRegressorModel(
+                debug=args.debug,
+                scale_trees=not args.no_scale_trees,
+            )
             model.load(model_name=args.model_name)
         except FileNotFoundError:
             logger.error(f'Model not found: {args.model_name}. Remove --skip-training flag.')
             sys.exit(1)
     else:
         try:
-            model = CatBoostRegressorModel(n_trials=args.n_trials)
+            model = CatBoostRegressorModel(
+                n_trials=args.n_trials,
+                debug=args.debug,
+                scale_trees=not args.no_scale_trees,
+            )
             model.fit(train_df)
             model.save(args.model_name)
             
@@ -233,22 +250,32 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
     print('=' * 80)
     
     try:
-        mae = model.compute_mae_power(train_df)
-        logger.info(f'Train MAE (Power): {mae:.4f}')
-        
-        # Save evaluation results
-        results = {
-            'train_mae_power': mae,
-            'model_name': args.model_name,
-            'n_trials': args.n_trials,
-            'n_samples': len(train_df)
-        }
-        
         import json
+        if model.eval_report_ is None:
+            # A model saved before this split has no report. Score the holdout rows only,
+            # and say so: that model may have been trained on them.
+            from src.preds.modelling_catboost import baseline_power_mae, holdout_mask
+            is_holdout = holdout_mask(train_df)
+            holdout_stats = model.compute_mae_power(train_df.loc[is_holdout])
+            results = {
+                'holdout_start': '2023-04-01',
+                'holdout_excluded_from_training': False,
+                'holdout_mae_power': holdout_stats['mae_power'],
+                'holdout_mae_power_consumption': holdout_stats['mae_power_consumption'],
+                'holdout_mae_power_production': holdout_stats['mae_power_production'],
+                'holdout_n': holdout_stats['n'],
+            }
+            results.update(baseline_power_mae(train_df, is_holdout))
+        else:
+            # fit() already scored April-May and did not train on those rows.
+            results = dict(model.eval_report_)
+        results['model_name'] = args.model_name
+        
         results_path = Path(RESULTS_DIR) / 'evaluation_results.json'
         with open(results_path, 'w') as f:
             json.dump(results, f, indent=2)
         logger.info(f'Evaluation results saved to {results_path}')
+        logger.info(f"Holdout MAE (Power): {results['holdout_mae_power']:.4f}")
         
         log_memory_cleanup('evaluation')
         logger.info('STEP 7 DONE: Evaluation completed')
@@ -264,7 +291,8 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
     print('=' * 80)
     
     logger.info(f'Model saved to: {MODELS_DIR}/{args.model_name}')
-    logger.info(f'Train MAE (Power): {mae:.4f}')
+    # This is the holdout figure written above, not the in-sample score.
+    logger.info(f"Holdout MAE (Power): {results['holdout_mae_power']:.4f}")
     
     # Final cleanup
     del train_df, model

@@ -7,7 +7,7 @@
     Strategy:
     - Add cyclical datetime features (hour, day, month encoded as sin/cos)
     - Add calendar features (holidays, day before holiday, DST shifts)
-    - Create lag features for key variables
+    - Create time-based lag features (target lags start at 48h)
     - Handle missing values appropriately
 
     Input:
@@ -49,16 +49,31 @@ os.chdir(PROJECT_ROOT)
 # ---------- Constants ---------- #
 PROCESSED_DATA_DIR = os.getenv('PROCESSED_DATA_DIR', './data/processed')
 
-# Default lag intervals (hours): 12h, 24h (1 day), 168h (1 week), 720h (30 days)
-DEFAULT_LAG_PERIODS = [12, 24, 168, 720]
+# Targets are revealed 48h later, so nothing shorter than 48h is knowable at forecast time.
+MIN_TARGET_LAG_HOURS = 48
+# 48h is two days back; 336h is two weeks. 12h and 24h were removed because they are not revealed yet.
+TARGET_LAG_HOURS = [48, 72, 96, 120, 144, 168, 336]
+# Kept as the name older imports used. It is no longer [12, 24, 168, 720].
+DEFAULT_LAG_PERIODS = TARGET_LAG_HOURS
+# Seven revealed same-hours: the target day minus 2 days, back through minus 8 days.
+SAME_HOUR_LAG_HOURS = [48 + 24 * day for day in range(7)]
 
-# Columns for lag features
-LAG_COLUMNS = [
-    'capacity_factor', 'electricity_price', 'gas_price',
+# Prices and observed weather are already shifted onto the latest legal timestamp in data_merging.
+# These extra steps go further back from that legal value, so they are legal too.
+COVARIATE_LAG_HOURS = [24, 168]
+COVARIATE_LAG_COLUMNS = [
+    'electricity_price', 'gas_price',
     'hw_temperature', 'hw_surface_pressure',
     'hw_cloudcover_total', 'hw_total_precipitation',
     'hw_windspeed_10m', 'hw_winddirection_10m',
     'hw_direct_solar_radiation', 'hw_diffuse_radiation',
+]
+# Old name. capacity_factor is lagged on its own, starting at 48h, so it is not in this list.
+LAG_COLUMNS = COVARIATE_LAG_COLUMNS
+
+# Written by data_merging so a test can check the source batch. Not model inputs.
+AUDIT_BLOCK_COLUMNS = [
+    'client_block_id', 'electricity_block_id', 'gas_block_id', 'fw_block_id', 'hw_block_id',
 ]
 
 
@@ -72,7 +87,7 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         - Cyclical datetime encoding (hour, day, month, year)
         - Estonian holidays and day-before-holiday flags
         - DST transition flags
-        - Lag features for capacity_factor, prices, and weather
+        - Lag features for capacity_factor (48h and older), prices, and observed weather
     '''
 
     def __init__(
@@ -87,7 +102,7 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
             
             Args:
                 mode: One of 'train', 'retrain', or 'test'
-                n_lag: List of lag periods in hours (default: [12, 24, 168, 720])
+                n_lag: Target lag hours. Each one must be >= 48. Default: 48, 72, 96, 120, 144, 168, 336.
                 train_df: Training DataFrame for retrain/test modes (for lag calculation)
                 retrain_df: Retrain DataFrame for test mode (for lag calculation)
         '''
@@ -95,7 +110,14 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
             raise ValueError(f"Mode must be 'train', 'retrain', or 'test', got: {mode}")
         
         self.mode = mode
-        self.n_lag = n_lag or DEFAULT_LAG_PERIODS
+        # A 12h or 24h target lag would be the target itself, which is not revealed until 48h later.
+        if n_lag is not None and any(lag < MIN_TARGET_LAG_HOURS for lag in n_lag):
+            raise ValueError(
+                f'Target lags must be >= {MIN_TARGET_LAG_HOURS}h because revealed targets are 2 days old. Got: {n_lag}'
+            )
+        self.target_lags = list(n_lag) if n_lag is not None else list(TARGET_LAG_HOURS)
+        # Alias used by the log line and by callers that still read n_lag.
+        self.n_lag = self.target_lags
         self.min_test_datetime = None
         self.min_retrain_datetime = None
         
@@ -324,32 +346,71 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         return df
 
     def _create_lag_features(self, df: pl.DataFrame) -> pl.DataFrame:
-        '''Create lag features for key columns'''
+        '''
+            Create lag features by joining each series to itself at an exact timestamp.
 
-        # Sort before creating lags
-        df = df.with_columns(pl.col("datetime").cast(pl.Datetime)).sort("datetime")
+            shift(n) counts rows, so a missing hour would relabel every later lag.
+            Joining on datetime - n hours keeps the lag equal to n hours across gaps and DST.
+        '''
+        series_keys = ['prediction_unit_id', 'is_consumption', 'datetime']
+        # One row per series-hour. A duplicate hour would multiply the join.
+        df = df.unique(subset=series_keys, keep='last')
 
-        if self.mode == 'train':  
-            # Create lag features for each column and lag period
-            for col in LAG_COLUMNS:
-                for lag in self.n_lag:
-                    df = df.with_columns([
-                        pl.col(col)
-                            .shift(lag)
-                            .over(["prediction_unit_id", "is_consumption"])
-                            .alias(f"{col}_lag_{lag}")
-                    ])
-        else:
-            # Fill existing lag columns with calculated values
-            df = df.with_columns([
-                pl.when(pl.col(col).is_null())  
-                  .then(pl.col(col).shift(lag).over(["prediction_unit_id", "is_consumption"]))  
-                  .otherwise(pl.col(col))  
-                  .alias(f"{col}_lag_{lag}")  
-                for col in LAG_COLUMNS for lag in self.n_lag  
-            ])
+        # The concatenated train/test frame may already carry lag columns from an earlier run.
+        # Drop them and rebuild, so a non-null current value cannot be copied into its own lag.
+        stale_lag_columns = [
+            col for col in df.columns
+            if '_lag_' in col or col.startswith('capacity_factor_same_hour_')
+        ]
+        if stale_lag_columns:
+            df = df.drop(stale_lag_columns)
 
-        logger.info(f'Lag features created: {len(LAG_COLUMNS)} columns x {len(self.n_lag)} lags')
+        # Hours to fetch, and which source columns are read at each hour.
+        columns_by_lag = {}
+        for lag in self.target_lags:
+            columns_by_lag.setdefault(lag, []).append('capacity_factor')
+        # 192h is the 7th revealed same-hour. It is only an input to the rolling stats below.
+        for lag in SAME_HOUR_LAG_HOURS:
+            columns_by_lag.setdefault(lag, [])
+            if 'capacity_factor' not in columns_by_lag[lag]:
+                columns_by_lag[lag].append('capacity_factor')
+        for lag in COVARIATE_LAG_HOURS:
+            columns_by_lag.setdefault(lag, []).extend(COVARIATE_LAG_COLUMNS)
+
+        # Read lags from this frame, not from the frame we are adding columns to.
+        base = df
+        for lag, columns in sorted(columns_by_lag.items()):
+            lagged = (
+                base
+                    .select(series_keys + columns)
+                    # A source row at T-lag is moved onto T, which is the row allowed to see it.
+                    .with_columns(
+                        (pl.col('datetime') + pl.duration(hours=lag)).alias('datetime')
+                    )
+                    .rename({col: f'{col}_lag_{lag}' for col in columns})
+            )
+            df = df.join(lagged, on=series_keys, how='left')
+
+        same_hour_columns = [f'capacity_factor_lag_{lag}' for lag in SAME_HOUR_LAG_HOURS]
+        df = df.with_columns([
+            # Mean of the same clock hour over the last 7 days whose target is already known.
+            pl.mean_horizontal(same_hour_columns).alias('capacity_factor_same_hour_mean_7d'),
+            # Spread of those same 7 hours. Nulls inside the list would make std null, so drop them first.
+            pl.concat_list(same_hour_columns).list.drop_nulls().list.std()
+                .alias('capacity_factor_same_hour_std_7d'),
+        ])
+        # Do not keep a lag that was built only to feed the 7-day stats.
+        temporary_lags = [
+            f'capacity_factor_lag_{lag}'
+            for lag in SAME_HOUR_LAG_HOURS
+            if lag not in self.target_lags
+        ]
+        if temporary_lags:
+            df = df.drop(temporary_lags)
+
+        logger.info(
+            f'Lag features created: target lags {self.target_lags}, covariate lags {COVARIATE_LAG_HOURS}'
+        )
         return df
     
     def _drop_rows(self, df: pl.DataFrame) -> pl.DataFrame:
@@ -361,7 +422,7 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         if self.mode == 'test' and self.min_test_datetime is not None:
             df = df.filter(pl.col('datetime') >= self.min_test_datetime)
 
-        # Drop rows with NaN in lag features (only for train/retrain)
+        # Train/retrain only. The longest target lag is 336h, so this removes the first two weeks of each series.
         if self.mode != 'test':
             df = df.drop_nulls()
         
@@ -383,6 +444,10 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
     
     def _convert_to_pandas(self, df: pl.DataFrame) -> pd.DataFrame:
         '''Convert to Pandas DataFrame for CatBoost compatibility'''
+        # Source batch ids are for the leakage check. They are not predictors.
+        audit_columns = [col for col in AUDIT_BLOCK_COLUMNS if col in df.columns]
+        if audit_columns:
+            df = df.drop(audit_columns)
         return df.to_pandas()
     
     def fit(self, X: pl.DataFrame, y=None) -> 'FeatureEngineering':
@@ -465,4 +530,12 @@ if __name__ == '__main__':
 
 
 # ---------- All exports ---------- #
-__all__ = ['FeatureEngineering', 'run_feature_engineering', 'LAG_COLUMNS', 'DEFAULT_LAG_PERIODS']
+__all__ = [
+    'FeatureEngineering',
+    'run_feature_engineering',
+    'LAG_COLUMNS',
+    'DEFAULT_LAG_PERIODS',
+    'TARGET_LAG_HOURS',
+    'COVARIATE_LAG_HOURS',
+    'AUDIT_BLOCK_COLUMNS',
+]

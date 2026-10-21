@@ -5,10 +5,11 @@
     DataFrames into a single unified DataFrame for feature engineering.
 
     Strategy:
-    - Join power data with client data on business keys
-    - Join with electricity and gas prices
-    - Join with weather data (forecast and historical) via county mapping
-    - Create derived features (capacity_factor)
+    - Join client capacity shifted forward by 2 days
+    - Join electricity and gas prices shifted forward by 1 day
+    - Join the day-ahead forecast from the same data_block_id
+    - Join observed weather shifted forward by 48 hours
+    - Create capacity_factor from that known capacity
 
     Input:
     - Dictionary of preprocessed DataFrames from DataPreparation
@@ -49,11 +50,11 @@ class DataMerging(BaseEstimator, TransformerMixin):
         Merge all preprocessed DataFrames into a single unified DataFrame.
         
         Performs joins on:
-        - Power + Client (on product_type, county, is_business, date)
-        - + Electricity prices (on datetime)
-        - + Gas prices (on datetime)
-        - + Forecast weather (on county, datetime)
-        - + Historical weather (on county, datetime)
+        - Power + Client shifted +2 days (capacity known for the target day)
+        - + Electricity prices shifted +1 day
+        - + Gas prices shifted +1 day, joined on the date
+        - + Forecast weather from the same data_block_id whose valid time is the target hour
+        - + Historical weather shifted +48 hours
     '''
         
     def __init__(self, mode: str = 'train'):
@@ -97,7 +98,21 @@ class DataMerging(BaseEstimator, TransformerMixin):
         )
         logger.info(f'Power data processed: {self.df.shape}')
 
-        # Join with client data
+        # Join with client data:
+        # Client rows are dated 2 days before the target day of the same batch.
+        # Moving the date forward attaches the capacity that is already known according to the competition rules.
+        self.client_df = (
+            self.client_df
+                .with_columns(
+                    (pl.col('date') + pl.duration(days=2)).alias('date')
+                )
+                # A repeated segment-day would multiply every target hour.
+                .unique(
+                    subset=['product_type', 'county', 'is_business', 'date'],
+                    keep='last'
+                )
+                .rename({'data_block_id': 'client_block_id'})
+        )
         self.df = (
             self.df
                 .join(
@@ -108,53 +123,49 @@ class DataMerging(BaseEstimator, TransformerMixin):
         )
         logger.info(f'After client join: {self.df.shape}')
 
-        # Prepare electricity prices
+        # The price file's timestamp is the previous day. Shift it onto the target hour.
         self.electricity_df = (
             self.electricity_df
                 .with_columns([
-                    pl.col('forecast_date').alias('datetime'),
+                    (pl.col('forecast_date') + pl.duration(days=1)).alias('datetime'),
                     pl.col('euros_per_mwh').abs().alias('electricity_price')
                 ])
+                # One price per hour; a duplicate hour would multiply the target rows.
+                .unique(subset=['datetime'], keep='last')
+                .rename({'data_block_id': 'electricity_block_id'})
         )
         
-        # Join with electricity prices
         self.df = (
             self.df
                 .join(
-                    self.electricity_df.select(['electricity_price', 'datetime']),
+                    self.electricity_df.select(
+                        ['electricity_price', 'datetime', 'electricity_block_id']
+                    ),
                     how='left',
                     on=['datetime']
                 )
         )
         logger.info(f'After electricity join: {self.df.shape}')
 
-        # Prepare gas prices (expand to hourly)
+        # Gas is one price per day, revealed for the previous day according to the comprtition rules.
         self.gas_df = (
             self.gas_df
                 .with_columns([
-                    pl.col('forecast_date').alias('date_only'),
-                    ((pl.col('lowest_price_per_mwh') + pl.col('highest_price_per_mwh')) / 2).alias('gas_price')
+                    (pl.col('forecast_date') + pl.duration(days=1)).cast(pl.Date).alias('date'),
+                    ((pl.col('lowest_price_per_mwh') + pl.col('highest_price_per_mwh')) / 2)
+                        .alias('gas_price')
                 ])
-        )
-        
-        # Create hourly gas prices
-        hours_df = pl.DataFrame({'hour': range(24)})
-        self.gas_df = (
-            self.gas_df
-                .join(hours_df, how='cross')
-                .with_columns([
-                    (pl.col('date_only') + pl.col('hour') * pl.duration(hours=1)).alias('datetime'),
-                ])
-                .select(['datetime', 'gas_price'])  
+                .unique(subset=['date'], keep='last')
+                .rename({'data_block_id': 'gas_block_id'})
+                .select(['date', 'gas_price', 'gas_block_id'])
         )
 
-        # Join with gas prices
         self.df = (
             self.df
                 .join(
                     self.gas_df,
                     how='left',
-                    on=['datetime']
+                    on=['date']
                 )
         )
         logger.info(f'After gas join: {self.df.shape}')
@@ -165,10 +176,22 @@ class DataMerging(BaseEstimator, TransformerMixin):
             '10_metre_u_wind_component', '10_metre_v_wind_component', 
             'direct_solar_radiation', 'surface_solar_radiation_downwards'
         ]
+
+        # The day each batch is asked to predict. One batch is one calendar day.
+        block_day = (
+            self.power_df
+                .select(
+                    'data_block_id',
+                    pl.col('datetime').dt.date().alias('block_date')
+                )
+                .unique(subset=['data_block_id'])
+        )
         
         self.forecast_weather_df = (
             self.forecast_weather_df
-                .filter(pl.col('hours_ahead') <= 24)
+                .join(block_day, on='data_block_id', how='inner')
+                # The forecast is for the target day according to the competition rules.
+                .filter(pl.col('forecast_datetime').dt.date() == pl.col('block_date'))
                 .with_columns(
                     pl.col('forecast_datetime').alias('datetime')
                 )
@@ -179,10 +202,10 @@ class DataMerging(BaseEstimator, TransformerMixin):
                 )
         )
         
-        # Aggregate forecast weather by county and datetime
+        # Average stations inside one county, one target hour, one forecast issue.
         self.forecast_weather_df = (
             self.forecast_weather_df
-                .group_by(['county', 'datetime'])
+                .group_by(['county', 'datetime', 'data_block_id'])
                 .agg([pl.mean(col).alias(f'fw_{col}') for col in forecast_weather_cols])  
                 .with_columns([
                     # Cap cloud cover at 100
@@ -197,21 +220,26 @@ class DataMerging(BaseEstimator, TransformerMixin):
                         .alias('fw_diffuse_solar_radiation'),
                     (pl.col('fw_total_precipitation') * 1000).abs()
                 ])
+                # Copy of the issue batch, kept after the join so it can be audited.
+                .with_columns(pl.col('data_block_id').alias('fw_block_id'))
         ) 
         
-        # Join with forecast weather
+        # Join with forecast weather:
+        # Same batch and same valid time, the day-ahead forecast according to the competition rules.
         self.df = (
             self.df
                 .join(
                     self.forecast_weather_df, 
                     how='left',
-                    on=['county', 'datetime']
+                    on=['county', 'datetime', 'data_block_id']
                 )
                 .with_columns(
                     [pl.col(f'fw_{col}').fill_null(pl.col(f'fw_{col}').median().over('datetime')) 
                      for col in forecast_weather_cols] + 
                     [pl.col('fw_diffuse_solar_radiation').fill_null(
                         pl.col('fw_diffuse_solar_radiation').median().over('datetime'))]
+                    # A county gap is filled from other counties at the same hour, which is the same batch.
+                    + [pl.col('fw_block_id').fill_null(pl.col('fw_block_id').max().over('datetime'))]
                 )  
         )
         logger.info(f'After forecast weather join: {self.df.shape}')
@@ -225,6 +253,10 @@ class DataMerging(BaseEstimator, TransformerMixin):
         
         self.historical_weather_df = (
             self.historical_weather_df
+                # 48h is old enough to have been revealed for every hour of the target day.
+                .with_columns(
+                    (pl.col('datetime') + pl.duration(hours=48)).alias('datetime')
+                )
                 .join(
                     self.mapping_df,
                     how='left',
@@ -232,17 +264,21 @@ class DataMerging(BaseEstimator, TransformerMixin):
                 )
         )
         
-        # Aggregate historical weather by county and datetime
+        # Average stations. The batch id is the batch that revealed the observation, not the target.
         self.historical_weather_df = (
             self.historical_weather_df
                 .group_by(['county', 'datetime'])
-                .agg([pl.mean(col).alias(f'hw_{col}') for col in historical_weather_cols])  
+                .agg(
+                    [pl.mean(col).alias(f'hw_{col}') for col in historical_weather_cols]
+                    + [pl.col('data_block_id').max().alias('hw_block_id')]
+                )  
                 .with_columns([
                     (pl.col('hw_rain') + pl.col('hw_snowfall')).alias('hw_total_precipitation')
                 ])
         )
         
-        # Join with historical weather
+        # Join with historical weather:
+        # Join on the shifted timestamp only. The observation's own batch is an earlier one.
         self.df = (
             self.df
                 .join(
@@ -255,18 +291,25 @@ class DataMerging(BaseEstimator, TransformerMixin):
                      for col in historical_weather_cols] +
                     [pl.col('hw_total_precipitation').fill_null(
                         pl.col('hw_total_precipitation').median().over('datetime'))]
+                    # Same-hour fill stays inside observations that were already shifted by 48h.
+                    + [pl.col('hw_block_id').fill_null(pl.col('hw_block_id').max().over('datetime'))]
                 ) 
         )
         logger.info(f'After historical weather join: {self.df.shape}')
-  
-        # Generate capacity_factor and define column order
+
+        # Generate capacity_factor and define column order:
+        # capacity_factor uses the capacity sitting on the row, which is the 2-day-old one according to the competition rules.
+        # Zero or missing capacity would make the ratio infinite, so those rows stay null and are dropped later.
         self.df = (
             self.df
                 .with_columns([
-                    (pl.col('power') / pl.col('installed_capacity')).alias('capacity_factor')
+                    pl.when(pl.col('installed_capacity') > 0)
+                        .then(pl.col('power') / pl.col('installed_capacity'))
+                        .otherwise(None)
+                        .alias('capacity_factor')
                 ])
                 .select(
-                    'row_id', 'datetime', 'prediction_unit_id', 'is_consumption', 
+                    'row_id', 'datetime', 'data_block_id', 'prediction_unit_id', 'is_consumption', 
                     'county', 'is_business', 'product_type',
                     'capacity_factor', 'power', 'installed_capacity', 
                     'electricity_price', 'gas_price',
@@ -277,7 +320,10 @@ class DataMerging(BaseEstimator, TransformerMixin):
                     'hw_temperature', 'hw_surface_pressure',
                     'hw_cloudcover_total', 'hw_total_precipitation',
                     'hw_windspeed_10m', 'hw_winddirection_10m',
-                    'hw_direct_solar_radiation', 'hw_diffuse_radiation'
+                    'hw_direct_solar_radiation', 'hw_diffuse_radiation',
+                    # Source batches. Feature engineering drops these before the model sees the frame.
+                    'client_block_id', 'electricity_block_id', 'gas_block_id',
+                    'fw_block_id', 'hw_block_id'
                 ) 
                 .sort('datetime')
         )

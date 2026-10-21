@@ -1,0 +1,29 @@
+{"timestamp": "2026-10-20 22:59:23,871", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-20 22:59:26,536", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-20 22:59:26,536", "module": "data_merging", "level": "INFO", "message": "Power data processed: (2, 10)"}
+{"timestamp": "2026-10-20 22:59:26,536", "module": "data_merging", "level": "INFO", "message": "After client join: (2, 12)"}
+{"timestamp": "2026-10-20 22:59:26,536", "module": "data_merging", "level": "INFO", "message": "After electricity join: (2, 14)"}
+{"timestamp": "2026-10-20 22:59:26,536", "module": "data_merging", "level": "INFO", "message": "After gas join: (2, 16)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2, 26)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2, 37)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2, 33)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "Power data processed: (2, 10)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "After client join: (2, 12)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "After electricity join: (2, 14)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "After gas join: (2, 16)"}
+{"timestamp": "2026-10-20 22:59:26,557", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2, 26)"}
+{"timestamp": "2026-10-20 22:59:26,573", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2, 37)"}
+{"timestamp": "2026-10-20 22:59:26,573", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2, 33)"}
+{"timestamp": "2026-10-20 22:59:27,157", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-20 22:59:27,161", "module": "data_merging", "level": "INFO", "message": "Power data processed: (27216, 10)"}
+{"timestamp": "2026-10-20 22:59:27,165", "module": "data_merging", "level": "INFO", "message": "After client join: (27216, 12)"}
+{"timestamp": "2026-10-20 22:59:27,165", "module": "data_merging", "level": "INFO", "message": "After electricity join: (27216, 14)"}
+{"timestamp": "2026-10-20 22:59:27,167", "module": "data_merging", "level": "INFO", "message": "After gas join: (27216, 16)"}
+{"timestamp": "2026-10-20 22:59:27,174", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (27216, 26)"}
+{"timestamp": "2026-10-20 22:59:27,189", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (27216, 37)"}
+{"timestamp": "2026-10-20 22:59:27,189", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (27216, 33)"}
+{"timestamp": "2026-10-20 22:59:55,533", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-20 23:00:34,314", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-20 23:01:03,656", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-21 15:12:48,073", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}

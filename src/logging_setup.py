@@ -6,7 +6,7 @@
 import os
 import logging
 from pathlib import Path
-from pythonjsonlogger import logger
+from pythonjsonlogger.jsonlogger import JsonFormatter
 
 # ---------- Logging setup ---------- #
 def setup_logging(name: str):
@@ -21,7 +21,8 @@ def setup_logging(name: str):
     logs_dir = project_root / 'logs'
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get a unique logger for this module
+    # One logger per module. The previous import never was a logger object, so every import failed.
+    logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     
     # Prevent logs from propagating to root logger
@@ -41,7 +42,7 @@ def setup_logging(name: str):
         json_handler = logging.FileHandler(str(log_file), mode='a')
         json_handler.setLevel(logging.INFO)
 
-        json_formatter = jsonlogger.JsonFormatter(
+        json_formatter = JsonFormatter(
             fmt='%(asctime)s %(name)s %(levelname)s %(message)s',
             rename_fields={'asctime': 'timestamp', 'levelname': 'level', 'name': 'module'}
         )

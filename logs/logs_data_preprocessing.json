@@ -1,0 +1,8 @@
+{"timestamp": "2026-10-20 22:59:23,869", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
+{"timestamp": "2026-10-20 22:59:27,126", "module": "data_preprocessing", "level": "INFO", "message": "DataPreparation initialized with mode: train"}
+{"timestamp": "2026-10-20 22:59:27,157", "module": "data_preprocessing", "level": "INFO", "message": "Intermediate data saved to C:\\Users\\iulii\\AppData\\Local\\Temp\\enefit_processed_si9a9hh1"}
+{"timestamp": "2026-10-20 22:59:27,157", "module": "data_preprocessing", "level": "INFO", "message": "DONE: Schema conversion completed"}
+{"timestamp": "2026-10-20 22:59:55,517", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
+{"timestamp": "2026-10-20 23:00:34,309", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
+{"timestamp": "2026-10-20 23:01:03,656", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
+{"timestamp": "2026-10-21 15:12:48,062", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}

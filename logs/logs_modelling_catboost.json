@@ -1,0 +1,11 @@
+{"timestamp": "2026-10-20 22:59:24,905", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-20 22:59:55,644", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-20 23:00:34,398", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-20 23:01:03,754", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-21 15:12:50,557", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-21 15:12:50,597", "module": "modelling_catboost", "level": "INFO", "message": "Tree count scaled from 10 to 15 (x1.500)"}
+{"timestamp": "2026-10-21 15:12:50,597", "module": "modelling_catboost", "level": "INFO", "message": "Tree count scaled from 50 to 75 (x1.500)"}
+{"timestamp": "2026-10-21 15:12:50,597", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 10"}
+{"timestamp": "2026-10-21 15:12:50,597", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 50"}
+{"timestamp": "2026-10-21 15:12:50,599", "module": "modelling_catboost", "level": "WARNING", "message": "Debug prediction_unit_id values not in the frame: [100]"}
+{"timestamp": "2026-10-21 15:12:50,599", "module": "modelling_catboost", "level": "INFO", "message": "Debug mode: 4 rows for prediction_unit_id [0, 1, 20] (dropped 1 rows)"}

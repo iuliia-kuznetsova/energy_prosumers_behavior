@@ -5,10 +5,36 @@
     energy consumption/production using capacity_factor as target.
 
     Strategy:
-    - Train separate models for consumption and production
-    - Use Optuna for hyperparameter optimization
-    - Support recursive forecasting with lag feature updates
-    - Convert capacity_factor predictions back to power
+    - Train separate models for consumption and production.
+
+    - Use CatBoostRegressor class for training and predicting.
+
+    - Test data is the April–May 2023 holdout.
+      This data is separated before model training and is never used for Optuna,
+      early stopping, tree-count selection, or final model fitting.
+      Test data is used only for evaluation of the final model performance.
+
+    - Train / validation data is split into three time slices using Rolling-origin CV logic, that is 
+        for each of validation months (the last 3 months January, February, and March 2023) 
+        the code creates three time slices:
+        -- fit for training with early stopping, 
+        -- inner for selection of the number of trees through early stopping, 
+        -- val for hyperparameters optimization, that is for calculating the MAE that Optuna minimizes.
+        Fit and inner together form train set.
+        Fit and inner together form the training set for the model that is
+        Val is never passed as eval_set.
+        For example, for Fabruary 2023 as a holdout month:
+        -- fit: everything before roughly mid-January,
+        -- inner: the last 14 days of January.
+        -- val: all of February;
+
+    - Use Optuna to optimize CatBoost hyperparameters by minimizing the
+      row-weighted mean power MAE across the three CV folds.
+
+    - After hyperparameter selection, refit each segment on all pre-holdout data and evaluate once on the test data.
+
+    - Convert predicted capacity_factor to power using installed_capacity,
+      then clip negative predictions to zero.
 
     Input:
     - Pandas DataFrame with features from FeatureEngineering
@@ -31,11 +57,11 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any, Union
 from dotenv import load_dotenv
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.model_selection import TimeSeriesSplit
 from catboost import CatBoostRegressor as CatBoost, Pool
 import optuna
 
 from src.logging_setup import setup_logging
+from src.preds.feature_engineering import TARGET_LAG_HOURS
 
 
 # ---------- Logging setup ---------- #
@@ -55,7 +81,16 @@ PROCESSED_DATA_DIR = os.getenv('PROCESSED_DATA_DIR', './data/processed')
 
 # Default hyperparameter search space
 DEFAULT_N_TRIALS = int(os.getenv('OPTUNA_N_TRIALS', 10))
+# How many month-long folds to score, counting backwards from the holdout.
 DEFAULT_CV_SPLITS = int(os.getenv('CV_SPLITS', 3))
+# Last two months of the competition window. Optuna never sees these rows.
+HOLDOUT_START = pd.Timestamp('2023-04-01')
+# Inner slice used only to decide how many trees to keep.
+INNER_ES_DAYS = 14
+# Stop the inner fit after this many rounds without a better MAE.
+EARLY_STOPPING_ROUNDS = 50
+# Passed to fit() and transform() when debug=True, so a short run uses the same units in both.
+DEBUG_PREDICTION_UNITS = [0, 1, 20, 100]
 
 # Target and categorical features
 TARGET = 'capacity_factor'
@@ -66,8 +101,192 @@ CAT_FEATURES = [
     'is_dst_spring_forward', 'is_dst_fall_backward'
 ]
 
-# Lag values must match FeatureEngineering
-LAG_VALUES = [12, 24, 168, 720]
+# Target lags the saved metadata advertises. 12h and 24h are not revealed in time, so they are gone.
+LAG_VALUES = TARGET_LAG_HOURS
+
+# Columns that identify a row or a fold. None of them is a predictor.
+NON_FEATURE_COLUMNS = [
+    'datetime', 'row_id', 'data_block_id', 'date', 'power',
+    'client_block_id', 'electricity_block_id', 'gas_block_id', 'fw_block_id', 'hw_block_id',
+]
+
+
+# ---------- Fold helpers ---------- #
+def block_day(df: pd.DataFrame) -> pd.Series:
+    '''One competition batch is one calendar day. Return that day, midnight, for every row.'''
+    # Min timestamp of the batch, then midnight, so a missing first hour cannot change the day.
+    return df.groupby('data_block_id')['datetime'].transform('min').dt.normalize()
+
+
+def holdout_mask(df: pd.DataFrame, holdout_start: pd.Timestamp = HOLDOUT_START) -> pd.Series:
+    '''True for every row whose batch day is on or after the holdout. No batch is split.'''
+    day = block_day(df)
+    # The cut is on the batch day, so every hour of a day stays on the same side.
+    mask = day >= holdout_start
+    # A batch id on both sides would mean the score mixes training hours with scored hours.
+    overlap = set(df.loc[mask, 'data_block_id']) & set(df.loc[~mask, 'data_block_id'])
+    if overlap:
+        raise ValueError(f'Holdout boundary splits data_block_id values: {sorted(overlap)[:5]}')
+    return mask
+
+
+def validation_month_starts(
+    cv_splits: int,
+    holdout_start: pd.Timestamp = HOLDOUT_START,
+) -> list:
+    '''Month starts of the rolling-origin folds, oldest first, all strictly before the holdout.'''
+    starts = []
+    for months_back in range(cv_splits, 0, -1):
+        # April holdout and 3 folds -> January, February, March.
+        month_start = (holdout_start - pd.DateOffset(months=months_back)).replace(day=1)
+        starts.append(pd.Timestamp(month_start))
+    return starts
+
+
+def rolling_origin_masks(df: pd.DataFrame, val_start: pd.Timestamp, inner_days: int = INNER_ES_DAYS) -> dict:
+    '''
+        Masks for one month fold.
+
+        'val' is the scored month. It is never passed as an eval_set.
+        'inner' is only for early stopping. 'train' is what the scored model is fit on.
+    '''
+    day = block_day(df)
+    # The scored window is one calendar month of whole batches.
+    val_end = val_start + pd.DateOffset(months=1)
+    # The two weeks before that month choose the tree count and nothing else.
+    es_start = val_start - pd.Timedelta(days=inner_days)
+    fit = day < es_start
+    inner = (day >= es_start) & (day < val_start)
+    train = day < val_start
+    val = (day >= val_start) & (day < val_end)
+    return {'fit': fit, 'inner': inner, 'train': train, 'val': val}
+
+
+def scaled_tree_count(
+    best_iteration_index: Optional[int],
+    n_es_train: int,
+    n_full_train: int,
+    fallback: int,
+    scale_trees: bool = True,
+) -> int:
+    '''
+        Turn CatBoost's 0-based best iteration into a tree count.
+
+        scale_trees=False keeps that count. Scaling multiplies it by the ratio of
+        the full training rows to the early-stopping rows, which adds trees the
+        inner slice never checked.
+    '''
+    # None means early stopping did not report an iteration, so keep the search budget.
+    if best_iteration_index is None or best_iteration_index < 0:
+        n_trees = fallback
+    else:
+        # best_iteration_ is the index of the best tree, so the count is one more.
+        n_trees = best_iteration_index + 1
+    if n_es_train <= 0:
+        raise ValueError('Early-stopping train split has no rows')
+    if not scale_trees:
+        logger.info(f'Tree count left unscaled at {n_trees}')
+        return max(1, int(n_trees))
+    # More rows need proportionally more trees to reach the same leaf size.
+    scale = n_full_train / n_es_train
+    scaled = max(1, int(np.ceil(n_trees * scale)))
+    logger.info(f'Tree count scaled from {n_trees} to {scaled} (x{scale:.3f})')
+    return scaled
+
+
+def limit_to_prediction_units(df: pd.DataFrame, units: List[int]) -> pd.DataFrame:
+    '''Keep rows whose prediction_unit_id is in `units`. Raise if none of them are present.'''
+    if 'prediction_unit_id' not in df.columns:
+        raise ValueError('prediction_unit_id is required when debug units are set')
+    # int() so an int16 id from the CSV matches the Python ints in DEBUG_PREDICTION_UNITS.
+    present = {int(unit) for unit in pd.unique(df['prediction_unit_id'])}
+    missing = [unit for unit in units if unit not in present]
+    if missing:
+        logger.warning(f'Debug prediction_unit_id values not in the frame: {missing}')
+    kept = [unit for unit in units if unit in present]
+    if not kept:
+        raise ValueError(f'None of the debug units {list(units)} are in the frame')
+    limited = df.loc[df['prediction_unit_id'].isin(kept)].copy()
+    logger.info(
+        f'Debug mode: {len(limited)} rows for prediction_unit_id {kept} '
+        f'(dropped {len(df) - len(limited)} rows)'
+    )
+    return limited
+
+
+def segment_power_mae(power_true: np.ndarray, power_pred: np.ndarray, is_consumption: np.ndarray) -> dict:
+    '''MAE in power units, overall and split into consumption and production.'''
+    error = np.abs(np.asarray(power_pred) - np.asarray(power_true))
+    # Boolean view of the 0/1 flag. True is consumption.
+    consumption = np.asarray(is_consumption).astype(bool)
+
+    def _mean(mask: np.ndarray):
+        # An empty side has no MAE. JSON can store null.
+        if mask.sum() == 0:
+            return None
+        return float(np.mean(error[mask]))
+
+    return {
+        'mae_power': float(np.mean(error)) if len(error) else None,
+        'mae_power_consumption': _mean(consumption),
+        'mae_power_production': _mean(~consumption),
+        'n': int(len(error)),
+    }
+
+
+def _weighted_mae(folds: list) -> Optional[float]:
+    '''Row-weighted mean of fold MAEs. Equal-weighting months would hide a longer month.'''
+    total_n = sum(fold['n'] for fold in folds)
+    if total_n == 0:
+        return None
+    total = sum(fold['mae_power'] * fold['n'] for fold in folds)
+    return float(total / total_n)
+
+
+def baseline_power_mae(df: pd.DataFrame, score_mask: pd.Series) -> dict:
+    '''
+        MAE of predicting each scored hour with the power from 48h ago and from 168h ago.
+
+        The history has to be in `df`, not only the scored rows, because April 1 looks back into March.
+    '''
+    power_path = Path(PROCESSED_DATA_DIR) / 'power.parquet'
+    # Actual power saved before it was dropped from the feature frame.
+    actual = pd.read_parquet(power_path)
+    history = df[['row_id', 'datetime', 'prediction_unit_id', 'is_consumption']].merge(
+        actual, on='row_id', how='inner'
+    )
+    scored_keys = df.loc[score_mask, ['row_id', 'datetime', 'prediction_unit_id', 'is_consumption']]
+    results = {}
+    for lag in (48, 168):
+        shifted = history.copy()
+        # Place each past target on the later timestamp that is allowed to use it.
+        shifted['datetime'] = shifted['datetime'] + pd.Timedelta(hours=lag)
+        # Two rows at the same series-hour would duplicate the scored rows.
+        shifted = shifted.drop_duplicates(
+            subset=['datetime', 'prediction_unit_id', 'is_consumption'],
+            keep='last',
+        )
+        pred = scored_keys.merge(
+            shifted[['datetime', 'prediction_unit_id', 'is_consumption', 'power']].rename(
+                columns={'power': 'pred_power'}
+            ),
+            on=['datetime', 'prediction_unit_id', 'is_consumption'],
+            how='inner',
+        )
+        # Actual power of the scored hour, not of the lagged hour.
+        pred = pred.merge(actual, on='row_id', how='inner')
+        # The competition target is non-negative.
+        pred['pred_power'] = np.maximum(pred['pred_power'].to_numpy(), 0)
+        stats = segment_power_mae(
+            pred['power'].to_numpy(),
+            pred['pred_power'].to_numpy(),
+            pred['is_consumption'].to_numpy(),
+        )
+        results[f'baseline_lag_{lag}_mae_power'] = stats['mae_power']
+        results[f'baseline_lag_{lag}_mae_power_consumption'] = stats['mae_power_consumption']
+        results[f'baseline_lag_{lag}_mae_power_production'] = stats['mae_power_production']
+        results[f'baseline_lag_{lag}_n'] = stats['n']
+    return results
 
 
 # ---------- CatBoostRegressor Class ---------- #
@@ -76,8 +295,8 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         CatBoost regression model for energy prosumer prediction.
         
         Trains separate models for consumption and production data,
-        uses Optuna for hyperparameter tuning, and supports recursive
-        forecasting for proper lag feature handling.
+        tunes them on month-long rolling folds, and reports MAE on a holdout
+        that is excluded from training.
     '''
     
     def __init__(
@@ -87,7 +306,9 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         cat_features: List[str] = None,
         n_trials: int = DEFAULT_N_TRIALS,
         cv_splits: int = DEFAULT_CV_SPLITS,
-        models_dir: str = MODELS_DIR
+        models_dir: str = MODELS_DIR,
+        debug: bool = False,
+        scale_trees: bool = True,
     ):
         '''
             Initialize the CatBoostRegressor model.
@@ -97,8 +318,10 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
                 target: Target column name
                 cat_features: List of categorical feature names
                 n_trials: Number of Optuna trials for hyperparameter optimization
-                cv_splits: Number of cross-validation splits
+                cv_splits: Number of month-long rolling folds immediately before the holdout
                 models_dir: Directory to save/load models
+                debug: Train and predict only DEBUG_PREDICTION_UNITS
+                scale_trees: Grow the early-stopping tree count in proportion to the larger train set
         '''
         self.random_state = random_state
         self.target = target
@@ -106,6 +329,11 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         self.n_trials = n_trials
         self.cv_splits = cv_splits
         self.models_dir = Path(models_dir)
+        # False keeps every prediction unit. True limits fit and transform to DEBUG_PREDICTION_UNITS.
+        self.debug = debug
+        self.prediction_units = list(DEBUG_PREDICTION_UNITS) if debug else None
+        # False keeps the tree count early stopping chose, instead of multiplying it by the row ratio.
+        self.scale_trees = scale_trees
         
         # Model components
         self.final_model_cb_consumption = None
@@ -115,12 +343,63 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         # Best hyperparameters
         self.best_params_consumption = None
         self.best_params_production = None
+        # Holdout metrics. None until fit() has scored the months it did not train on.
+        self.eval_report_ = None
         
         # Create models directory
         self.models_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f'CatBoostRegressorModel initialized')
         logger.info(f'Target: {target}, Categorical features: {len(self.cat_features)}')
+        logger.info(f'Debug units: {self.prediction_units}. Scale trees: {self.scale_trees}')
+
+    def _feature_columns(self, df: pd.DataFrame) -> pd.Index:
+        '''Predictors only. The batch id stays on the frame for the folds and is not a feature.'''
+        excluded = list(NON_FEATURE_COLUMNS) + [self.target]
+        return df.columns.difference(excluded)
+
+    def _scaled_iterations(
+        self,
+        params: dict,
+        frame: pd.DataFrame,
+        train_mask: pd.Series,
+        fit_mask: pd.Series,
+        inner_mask: pd.Series,
+    ) -> int:
+        '''
+            Fit on the early-stopping train slice, read the best tree index, scale it.
+
+            The inner slice is the only eval_set. The caller refits without it.
+        '''
+        if int(fit_mask.sum()) == 0 or int(inner_mask.sum()) == 0:
+            raise ValueError('Early-stopping split has an empty side')
+        # Copy so the search budget on this trial is not overwritten by the scaled count.
+        es_params = dict(params)
+        model = CatBoost(**es_params)
+        model.fit(
+            Pool(
+                frame.loc[fit_mask, self.features],
+                frame.loc[fit_mask, self.target],
+                cat_features=self.cat_features,
+            ),
+            # Inner slice only. The month we report is not in this pool.
+            eval_set=Pool(
+                frame.loc[inner_mask, self.features],
+                frame.loc[inner_mask, self.target],
+                cat_features=self.cat_features,
+            ),
+            early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+            # Keep the best inner-slice tree so get_best_iteration is that tree, not the last one.
+            use_best_model=True,
+            verbose=0,
+        )
+        return scaled_tree_count(
+            model.get_best_iteration(),
+            int(fit_mask.sum()),
+            int(train_mask.sum()),
+            fallback=int(es_params['iterations']),
+            scale_trees=self.scale_trees,
+        )
 
     def _objective(
         self,
@@ -129,232 +408,257 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         mask: pd.Series
     ) -> float:
         '''
-            Optuna objective function for hyperparameter optimization.
-            
-            Uses TimeSeriesSplit cross-validation and MAE as the metric.
+            Mean power MAE over month-long folds.
+
+            Each fold early-stops on the two weeks before the month, then refits
+            on everything before the month and scores the month. The month is not an eval_set.
         '''
-        df_subset = df[mask]
-        features = df_subset.columns.difference(['datetime', self.target, 'row_id'])
-
-        tscv = TimeSeriesSplit(n_splits=self.cv_splits)
-
+        # This frame is already the pre-holdout rows of one segment.
+        df_subset = df.loc[mask]
         params = {
             'iterations': trial.suggest_int('iterations', 100, 1000),
             'depth': trial.suggest_int('depth', 4, 12),
             'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
             'l2_leaf_reg': trial.suggest_float('l2_leaf_reg', 0.01, 10, log=True),
             'score_function': trial.suggest_categorical('score_function', ['Cosine', 'L2']),
+            # MAE matches the competition metric. The reported number is still power, not capacity factor.
             'loss_function': 'MAE',
+            'eval_metric': 'MAE',
             'grow_policy': trial.suggest_categorical('grow_policy', ['SymmetricTree', 'Depthwise', 'Lossguide']),
             'random_seed': self.random_state,
             'logging_level': 'Silent'
         }
 
-        mae_scores = []
-        for train_index, test_index in tscv.split(df_subset):
-            train_df, test_df = df_subset.iloc[train_index], df_subset.iloc[test_index]
-            X_train, y_train = train_df[features], train_df[self.target]
-            X_test, y_test = test_df[features], test_df[self.target]
-            
-            train_pool = Pool(X_train, y_train, cat_features=self.cat_features)
-            test_pool = Pool(X_test, y_test, cat_features=self.cat_features)
-            
-            model = CatBoost(**params)
-            model.fit(train_pool, eval_set=test_pool, verbose=0)
-            
-            predictions = model.predict(test_pool)
-            mae = np.mean(np.abs(y_test - predictions))
-            mae_scores.append(mae)
+        fold_stats = []
+        for val_start in validation_month_starts(self.cv_splits):
+            masks = rolling_origin_masks(df_subset, val_start)
+            if int(masks['val'].sum()) == 0 or int(masks['train'].sum()) == 0:
+                raise ValueError(f'Fold {val_start.date()} has no train or validation rows')
+            n_trees = self._scaled_iterations(
+                params, df_subset, masks['train'], masks['fit'], masks['inner']
+            )
+            # New dict: the refit must not carry an eval_set, and it uses the scaled tree count.
+            refit_params = dict(params)
+            refit_params['iterations'] = n_trees
+            model = CatBoost(**refit_params)
+            # No eval_set. Passing the scored month here would pick the tree count on the score itself.
+            model.fit(
+                Pool(
+                    df_subset.loc[masks['train'], self.features],
+                    df_subset.loc[masks['train'], self.target],
+                    cat_features=self.cat_features,
+                ),
+                verbose=0,
+            )
+            val = df_subset.loc[masks['val']]
+            capacity_pred = model.predict(val[self.features])
+            # Back to power with the capacity that was on the row, then clip at zero.
+            power_pred = np.maximum(capacity_pred * val['installed_capacity'].to_numpy(), 0)
+            power_true = (val[self.target] * val['installed_capacity']).to_numpy()
+            stats = segment_power_mae(power_true, power_pred, val['is_consumption'].to_numpy())
+            stats['val_start'] = str(val_start.date())
+            fold_stats.append(stats)
 
-        mean_mae = np.mean(mae_scores)
-        logger.info(f'Trial {trial.number + 1}: MAE = {mean_mae:.6f}')
+        # Stored on the trial so the winning trial's months can be written to the report.
+        trial.set_user_attr('folds', fold_stats)
+        mean_mae = _weighted_mae(fold_stats)
+        logger.info(f'Trial {trial.number + 1}: power MAE = {mean_mae:.6f}')
         return mean_mae
+
+    def _final_iterations(self, params: dict, frame: pd.DataFrame) -> int:
+        '''Tree count for the model we keep: early-stop on the last 14 pre-holdout days, then scale.'''
+        day = block_day(frame)
+        # These 14 days sit inside the training period. The holdout has already been removed from `frame`.
+        es_start = HOLDOUT_START - pd.Timedelta(days=INNER_ES_DAYS)
+        fit_mask = day < es_start
+        inner_mask = day >= es_start
+        # Scale up from the early-stopping rows to every pre-holdout row of this segment.
+        train_mask = pd.Series(True, index=frame.index)
+        return self._scaled_iterations(params, frame, train_mask, fit_mask, inner_mask)
+
+    def _fit_segment(self, study: optuna.Study, frame: pd.DataFrame) -> Tuple[CatBoost, dict, list]:
+        '''Refit one segment on all of its pre-holdout rows, with the scaled tree count.'''
+        params = dict(study.best_params)
+        params.update({
+            'loss_function': 'MAE',
+            'eval_metric': 'MAE',
+            'random_seed': self.random_state,
+            'logging_level': 'Silent',
+        })
+        # Replace the searched ceiling with the tree count chosen on the inner slice.
+        params['iterations'] = self._final_iterations(params, frame)
+        model = CatBoost(**params)
+        # No eval_set: there is no scored month left in this frame.
+        model.fit(
+            Pool(frame[self.features], frame[self.target], cat_features=self.cat_features),
+            verbose=100,
+        )
+        return model, params, study.best_trial.user_attrs['folds']
 
     def fit(self, df: pd.DataFrame, y=None) -> 'CatBoostRegressorModel':
         '''
-            Fit the CatBoost models for consumption and production.
-            
-            Runs Optuna hyperparameter optimization separately for each,
-            then trains final models with best parameters on full data.
+            Tune on months before April 2023, train on those same rows, score April-May.
+
+            The holdout rows are not passed to Optuna and not passed to the final fit.
         '''
         logger.info('Starting model training')
-        
-        # Define features
-        self.features = df.columns.difference(['datetime', self.target, 'row_id'])
+        required = {'datetime', 'data_block_id', self.target, 'installed_capacity', 'is_consumption', 'row_id'}
+        missing = required.difference(df.columns)
+        if missing:
+            raise ValueError(f'Missing columns required for day folds and power MAE: {sorted(missing)}')
+
+        # Both segments, the CV folds, and the holdout then see only these units.
+        if self.debug:
+            df = limit_to_prediction_units(df, self.prediction_units)
+
+        # Batch id is excluded here, so the model cannot use the fold key as a feature.
+        self.features = self._feature_columns(df)
         logger.info(f'Features: {len(self.features)}')
 
-        # Optimize and train consumption model
-        logger.info('Optimizing CONSUMPTION model...')
-        study_consumption = optuna.create_study(direction='minimize')
-        mask_consumption = df['is_consumption'] == 1
-        
+        # Whole batches on or after 2023-04-01. Both sides must exist or there is no honest score.
+        is_holdout = holdout_mask(df)
+        tune_df = df.loc[~is_holdout]
+        holdout_df = df.loc[is_holdout]
+        if len(tune_df) == 0 or len(holdout_df) == 0:
+            raise ValueError(
+                f'Need rows on both sides of {HOLDOUT_START.date()}. '
+                f'Got {len(tune_df)} train rows and {len(holdout_df)} holdout rows.'
+            )
+        logger.info(f'Pre-holdout rows: {len(tune_df)}. Holdout rows: {len(holdout_df)}')
+
         optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        # Consumption study. The mask index matches tune_df, which has no holdout rows.
+        logger.info('Optimizing consumption model')
+        study_consumption = optuna.create_study(direction='minimize')
+        mask_consumption = tune_df['is_consumption'] == 1
         study_consumption.optimize(
-            lambda trial: self._objective(trial, df=df, mask=mask_consumption), 
+            lambda trial: self._objective(trial, df=tune_df, mask=mask_consumption),
             n_trials=self.n_trials,
-            show_progress_bar=True
+            show_progress_bar=True,
         )
-        
-        self.best_params_consumption = study_consumption.best_params
-        self.best_params_consumption.update({
-            'loss_function': 'MAE',
-            'random_seed': self.random_state,
-            'logging_level': 'Silent'
-        })
+        logger.info(f'Best consumption power MAE: {study_consumption.best_value:.6f}')
+        consumption_frame = tune_df.loc[mask_consumption]
+        (
+            self.final_model_cb_consumption,
+            self.best_params_consumption,
+            consumption_folds,
+        ) = self._fit_segment(study_consumption, consumption_frame)
         logger.info(f'Best consumption params: {self.best_params_consumption}')
-        logger.info(f'Best consumption MAE: {study_consumption.best_value:.6f}')
 
-        # Optimize and train production model
-        logger.info('Optimizing PRODUCTION model...')
+        # Production study, same holdout exclusion.
+        logger.info('Optimizing production model')
         study_production = optuna.create_study(direction='minimize')
-        mask_production = df['is_consumption'] == 0
-        
+        mask_production = tune_df['is_consumption'] == 0
         study_production.optimize(
-            lambda trial: self._objective(trial, df=df, mask=mask_production), 
+            lambda trial: self._objective(trial, df=tune_df, mask=mask_production),
             n_trials=self.n_trials,
-            show_progress_bar=True
+            show_progress_bar=True,
         )
-        
-        self.best_params_production = study_production.best_params
-        self.best_params_production.update({
-            'loss_function': 'MAE',
-                            'random_seed': self.random_state,
-            'logging_level': 'Silent'
-        })
+        logger.info(f'Best production power MAE: {study_production.best_value:.6f}')
+        production_frame = tune_df.loc[mask_production]
+        (
+            self.final_model_cb_production,
+            self.best_params_production,
+            production_folds,
+        ) = self._fit_segment(study_production, production_frame)
         logger.info(f'Best production params: {self.best_params_production}')
-        logger.info(f'Best production MAE: {study_production.best_value:.6f}')
 
-        # Train final models on full data
-        logger.info('Training final CONSUMPTION model on full data...')
-        self.final_model_cb_consumption = CatBoost(**self.best_params_consumption)
-        consumption_pool = Pool(
-            df[self.features][mask_consumption], 
-            df[self.target][mask_consumption], 
-            cat_features=self.cat_features
-        )
-        self.final_model_cb_consumption.fit(consumption_pool, verbose=100)
-
-        logger.info('Training final PRODUCTION model on full data...')
-        self.final_model_cb_production = CatBoost(**self.best_params_production)
-        production_pool = Pool(
-            df[self.features][mask_production], 
-            df[self.target][mask_production], 
-            cat_features=self.cat_features
-        )
-        self.final_model_cb_production.fit(production_pool, verbose=100)
-
+        # Headline score: predictions for the holdout only, compared with the saved power target.
+        holdout_stats = self.compute_mae_power(holdout_df)
+        # Baselines need the pre-holdout history, so they see the full frame and are scored on the mask.
+        baselines = baseline_power_mae(df, is_holdout)
+        self.eval_report_ = {
+            'holdout_start': str(HOLDOUT_START.date()),
+            # The saved model was not fit on these rows. The MAE below is not an in-sample score.
+            'holdout_excluded_from_training': True,
+            'holdout_mae_power': holdout_stats['mae_power'],
+            'holdout_mae_power_consumption': holdout_stats['mae_power_consumption'],
+            'holdout_mae_power_production': holdout_stats['mae_power_production'],
+            'holdout_n': holdout_stats['n'],
+            'cv_mae_power_consumption': _weighted_mae(consumption_folds),
+            'cv_mae_power_production': _weighted_mae(production_folds),
+            'cv_mae_power': _weighted_mae(consumption_folds + production_folds),
+            'cv_folds_consumption': consumption_folds,
+            'cv_folds_production': production_folds,
+            'n_train_samples': int(len(tune_df)),
+            'n_trials': self.n_trials,
+            'debug': self.debug,
+            'debug_prediction_units': self.prediction_units,
+            'scale_trees': self.scale_trees,
+        }
+        self.eval_report_.update(baselines)
+        logger.info(f"Holdout power MAE: {self.eval_report_['holdout_mae_power']:.4f}")
+        logger.info(f"Baseline lag-48 power MAE: {baselines['baseline_lag_48_mae_power']:.4f}")
+        logger.info(f"Baseline lag-168 power MAE: {baselines['baseline_lag_168_mae_power']:.4f}")
         logger.info('DONE: Model training completed')
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
         '''
-            Generate predictions using trained models.
-            
-            Implements recursive forecasting with lag feature updates
-            when capacity_factor lag features are present.
+            Predict every row in one batch.
+
+            Target lags start at 48h and the other lags are already legal, so the next day
+            does not depend on predictions made earlier in the same batch.
         '''
         if self.final_model_cb_consumption is None or self.final_model_cb_production is None:
             raise RuntimeError("Models not trained. Call `fit` before `transform`.")
         
         if self.features is None:
             raise RuntimeError("Features not defined. Call `fit` or `load` with features first.")
+
+        # Same unit list as training, so a debug model is not asked to score every series.
+        if self.debug:
+            X = limit_to_prediction_units(X, self.prediction_units)
         
         X_test = X.copy()
         X_test['predictions'] = np.nan
-        
-        # Sort for sequential forecasting
-        X_test = X_test.sort_values(
-            by=['datetime', 'prediction_unit_id', 'is_consumption']
-        ).reset_index(drop=True)
-        
-        # Check if recursive forecasting is needed
-        capacity_lag_cols = [
-            f'capacity_factor_lag_{lag}' for lag in LAG_VALUES 
-            if f'capacity_factor_lag_{lag}' in X_test.columns
-        ]
-        needs_recursive = len(capacity_lag_cols) > 0
-        
-        n_rows = len(X_test)
         consumption_mask = X_test['is_consumption'] == 1
         production_mask = X_test['is_consumption'] == 0
+
+        # One predict call per segment. A row-by-row loop is not needed once lags are >= 48h.
+        if consumption_mask.any():
+            X_test.loc[consumption_mask, 'predictions'] = \
+                self.final_model_cb_consumption.predict(X_test.loc[consumption_mask, self.features])
+        if production_mask.any():
+            X_test.loc[production_mask, 'predictions'] = \
+                self.final_model_cb_production.predict(X_test.loc[production_mask, self.features])
         
-        if needs_recursive:
-            # Recursive forecasting - process row by row
-            logger.info(f'Running recursive forecasting for {n_rows} rows...')
-            
-            for idx in range(n_rows):
-                current_features = X_test[self.features].iloc[idx:idx+1]
-                
-                if X_test.at[idx, 'is_consumption'] == 1:
-                    prediction = self.final_model_cb_consumption.predict(current_features)[0]
-                else:
-                    prediction = self.final_model_cb_production.predict(current_features)[0]
-                
-                X_test.at[idx, 'predictions'] = prediction
-                X_test.at[idx, 'capacity_factor'] = prediction
-                
-                # Update lag features for future rows
-                for lag in LAG_VALUES:
-                    future_idx = idx + lag
-                    if future_idx < n_rows:
-                        lag_column = f'capacity_factor_lag_{lag}'
-                        if lag_column in X_test.columns:
-                            if (X_test.at[future_idx, 'prediction_unit_id'] == X_test.at[idx, 'prediction_unit_id'] and
-                                X_test.at[future_idx, 'is_consumption'] == X_test.at[idx, 'is_consumption']):
-                                X_test.at[future_idx, lag_column] = prediction
-                
-                if (idx + 1) % 1000 == 0:
-                    logger.info(f'Processed {idx + 1}/{n_rows} rows')
-        else:
-            # Batch prediction (no recursive forecasting needed)
-            logger.info('Running batch prediction...')
-            
-            if consumption_mask.any():
-                X_test.loc[consumption_mask, 'predictions'] = \
-                    self.final_model_cb_consumption.predict(X_test.loc[consumption_mask, self.features])
-            
-            if production_mask.any():
-                X_test.loc[production_mask, 'predictions'] = \
-                    self.final_model_cb_production.predict(X_test.loc[production_mask, self.features])
-        
-        # Calculate power from capacity_factor
-        installed_capacity = X_test['installed_capacity'].values
-        X_test['target'] = X_test['predictions'] * installed_capacity
-        X_test['target'] = np.maximum(X_test['target'], 0)  # Non-negative
+        # Power = predicted capacity factor times the capacity known for that row, floored at zero.
+        installed_capacity = X_test['installed_capacity'].to_numpy()
+        X_test['target'] = np.maximum(X_test['predictions'].to_numpy() * installed_capacity, 0)
         
         submission = X_test[['row_id', 'target']]
-        
         logger.info(f'DONE: Generated {len(submission)} predictions')
         return submission
     
-    def compute_mae_power(self, df: pd.DataFrame) -> float:
+    def compute_mae_power(self, df: pd.DataFrame) -> dict:
         '''
-            Compute MAE for power predictions against actual values.
-            
-            Loads actual power from saved file and compares with predictions.
+            Power MAE of `df` against the saved target, overall and by segment.
+
+            Pass the holdout rows, not the training rows. The return is a dict, not a single in-sample float.
         '''
-        # Load actual power values
         power_path = Path(PROCESSED_DATA_DIR) / 'power.parquet'
         if not power_path.exists():
             raise FileNotFoundError(f"Power file not found: {power_path}")
         
         revealed_power = pd.read_parquet(power_path)
-        
-        # Get predictions
         predicted_power = self.transform(df)
-        
-        # Merge and compute MAE
-        mae_calculation = pd.merge(
-            revealed_power[['row_id', 'power']], 
-            predicted_power[['row_id', 'target']], 
-            on='row_id', 
-            how='left'
+        # Inner join: only hours that have both a prediction and a saved target.
+        scored = predicted_power.merge(revealed_power[['row_id', 'power']], on='row_id', how='inner')
+        # The segment flag lives on the feature frame, not in power.parquet.
+        scored = scored.merge(df[['row_id', 'is_consumption']], on='row_id', how='left')
+        scored = scored.dropna(subset=['power', 'target'])
+        stats = segment_power_mae(
+            scored['power'].to_numpy(),
+            scored['target'].to_numpy(),
+            scored['is_consumption'].to_numpy(),
         )
-        mae_calculation = mae_calculation.dropna(subset=['power', 'target'])
-        mae_power = np.mean(np.abs(mae_calculation['target'] - mae_calculation['power']))
-        
-        logger.info(f'Power MAE: {mae_power:.4f}')
-        return mae_power
+        logger.info(
+            f"Power MAE: {stats['mae_power']:.4f} "
+            f"(consumption {stats['mae_power_consumption']}, production {stats['mae_power_production']})"
+        )
+        return stats
 
     def save(self, model_name: str = 'catboost_prosumer') -> str:
         '''
@@ -383,7 +687,13 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             'target': self.target,
             'random_state': self.random_state,
             'best_params_consumption': self.best_params_consumption,
-            'best_params_production': self.best_params_production
+            'best_params_production': self.best_params_production,
+            # The holdout score travels with the model so a later load does not recompute it on training rows.
+            'eval_report': self.eval_report_,
+            # Reloading a debug model keeps prediction on the units it was trained on.
+            'debug': self.debug,
+            'debug_prediction_units': self.prediction_units,
+            'scale_trees': self.scale_trees,
         }
         with open(model_path / 'metadata.json', 'w') as f:
             json.dump(metadata, f, indent=2)
@@ -430,6 +740,14 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         self.target = metadata['target']
         self.best_params_consumption = metadata.get('best_params_consumption')
         self.best_params_production = metadata.get('best_params_production')
+        # Absent on models saved before the holdout split existed.
+        self.eval_report_ = metadata.get('eval_report')
+        # A model trained on the debug units must keep that limit when it is loaded for prediction.
+        if metadata.get('debug'):
+            self.debug = True
+            self.prediction_units = metadata.get('debug_prediction_units', list(DEBUG_PREDICTION_UNITS))
+        if 'scale_trees' in metadata:
+            self.scale_trees = bool(metadata['scale_trees'])
         
         logger.info(f'Models loaded from {load_path}')
         return self
@@ -445,7 +763,9 @@ def run_modelling(
     train_df: pd.DataFrame,
     n_trials: int = DEFAULT_N_TRIALS,
     save_model: bool = True,
-    model_name: str = 'catboost_prosumer'
+    model_name: str = 'catboost_prosumer',
+    debug: bool = False,
+    scale_trees: bool = True,
 ) -> CatBoostRegressorModel:
     '''
         Run the modelling pipeline.
@@ -455,13 +775,15 @@ def run_modelling(
             n_trials: Number of Optuna trials
             save_model: Whether to save the trained model
             model_name: Name for saved model
+            debug: Train and predict only DEBUG_PREDICTION_UNITS
+            scale_trees: Scale the early-stopping tree count up to the full training set
             
         Returns:
             Trained CatBoostRegressorModel
     '''
     logger.info('Starting modelling pipeline')
     
-    model = CatBoostRegressorModel(n_trials=n_trials)
+    model = CatBoostRegressorModel(n_trials=n_trials, debug=debug, scale_trees=scale_trees)
     model.fit(train_df)
     
     if save_model:
@@ -485,8 +807,8 @@ if __name__ == '__main__':
     features_df = run_feature_engineering(merged_df)
     
     model = run_modelling(features_df, n_trials=5)
-    mae = model.compute_mae_power(features_df)
-    print(f'Train MAE: {mae:.4f}')
+    # Printed number is the holdout, which fit() did not train on.
+    print(model.eval_report_)
 
 
 # ---------- All exports ---------- #
@@ -495,5 +817,6 @@ __all__ = [
     'run_modelling', 
     'TARGET', 
     'CAT_FEATURES',
-    'LAG_VALUES'
+    'LAG_VALUES',
+    'DEBUG_PREDICTION_UNITS',
 ]
