@@ -79,18 +79,34 @@ class FoldTests(unittest.TestCase):
         self.assertEqual(scaled_tree_count(None, 100, 150, fallback=50, scale_trees=False), 50)
 
 
+class CliFlagTests(unittest.TestCase):
+    def test_main_preds_accepts_debug_and_no_tree_scale(self):
+        from src.preds.main_preds import parse_args
+
+        args = parse_args(['--debug', '--no-tree-scale'])
+        self.assertTrue(args.debug)
+        self.assertTrue(args.no_tree_scale)
+
+    def test_modelling_accepts_debug_and_no_tree_scale(self):
+        from src.preds.modelling_catboost import parse_args
+
+        args = parse_args(['--debug', '--no-tree-scale'])
+        self.assertTrue(args.debug)
+        self.assertTrue(args.no_tree_scale)
+
+
 class DebugUnitTests(unittest.TestCase):
     def test_debug_list_is_the_four_requested_units(self):
-        self.assertEqual(DEBUG_PREDICTION_UNITS, [0, 1, 20, 100])
+        self.assertEqual(DEBUG_PREDICTION_UNITS, [3, 19, 48, 60])
 
     def test_limit_keeps_only_the_debug_units_that_exist(self):
         df = pd.DataFrame({
-            'prediction_unit_id': [0, 1, 2, 20, 20],
+            'prediction_unit_id': [3, 19, 2, 48, 48],
             'value': [1, 2, 3, 4, 5],
         })
         limited = limit_to_prediction_units(df, DEBUG_PREDICTION_UNITS)
-        # Unit 100 is absent, so it is skipped. Unit 2 is not in the debug list.
-        self.assertEqual(sorted(limited['prediction_unit_id'].tolist()), [0, 1, 20, 20])
+        # Unit 60 is absent, so it is skipped. Unit 2 is not in the debug list.
+        self.assertEqual(sorted(limited['prediction_unit_id'].tolist()), [3, 19, 48, 48])
 
 
 class BaselineTests(unittest.TestCase):

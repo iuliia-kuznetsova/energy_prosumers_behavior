@@ -46,7 +46,8 @@ energy_prosumers_behavior/
 ├── README.md                       # This file
 ├── .env                            # Environment variables
 ├── requirements.txt                # Python dependencies
-├── start_mlflow_server.sh          # MLflow server launch script
+├── start_mlflow_server.ps1         # Local MLflow server (Windows)
+├── start_mlflow_server.sh          # Local MLflow server (Git Bash / WSL / Linux)
 │
 ├── src/
 │   ├── logging_setup.py            # Logging configuration
@@ -85,7 +86,7 @@ energy_prosumers_behavior/
 - **Optuna** — hyperparameter optimization
 - **Holidays** — Estonian public holiday calendar
 - **Kaggle** — competition data download
-- **MLflow** — experiment tracking (optional)
+- **MLflow** — local experiment tracking (SQLite + disk artifacts)
 - **python-dotenv** — environment variable management
 
 
@@ -143,35 +144,37 @@ The data can be downloaded automatically via Kaggle API or manually from the com
    # Option B: Set environment variables in .env (see env.template)
    ```
 
-5. Start MLflow Server (optional)
-```bash
-# Start MLflow server (requires PostgreSQL and S3/MinIO)
-bash start_mlflow_server.sh
-# Or start with local backend
-mlflow server --host 0.0.0.0 --port 5000
+5. Start the local MLflow server (optional, keep this terminal open):
+```powershell
+.\start_mlflow_server.ps1
 ```
+```bash
+bash start_mlflow_server.sh
+```
+UI: http://127.0.0.1:5000 — see [MLflow Experiment Tracking](#mlflow-experiment-tracking).
 
 6. Run the ML pipeline:
 ```bash
-# Run full pipeline (download data, preprocess, train, evaluate)
-python3 -m src.preds.main_preds
+# Full pipeline (download, preprocess, train, evaluate, log to MLflow)
+python -m src.preds.main_preds
 
-# Skip data download if already present
-python3 -m src.preds.main_preds --skip-download
+# Skip data download if files are already in data/raw
+python -m src.preds.main_preds --skip-download
 
-# Skip model training (load existing model)
-python3 -m src.preds.main_preds --skip-training
+# Skip model training (load an existing model). Does not log to MLflow.
+python -m src.preds.main_preds --skip-training
 
-# Custom number of Optuna trials
-python3 -m src.preds.main_preds --n-trials 20
+# Custom number of Optuna trials and MLflow run name
+python -m src.preds.main_preds --n-trials 20 --mlflow-run-name my_run
+
+# Train without sending anything to MLflow
+python -m src.preds.main_preds --no-mlflow
 ```
 
-7. Stopping Services
+7. Stopping services
 ```bash
-# Stop virtual environment
+# Stop the MLflow server: Ctrl+C in its terminal
 deactivate
-# Stop MLflow server
-# (Ctrl+C if running in MLflow running terminal)
 ```
 
 
@@ -198,10 +201,68 @@ deactivate
    - Recursive forecasting with lag feature updates
    - Batch prediction mode when recursive updates are not needed
    - MAE evaluation on power (`capacity_factor × installed_capacity`)
+7. **MLflow Logging**:
+   - After training, parameters, holdout / CV metrics, and both CatBoost models are sent to a local tracking server (see [MLflow Experiment Tracking](#mlflow-experiment-tracking))
 
 
-## Service URLs
-MLflow — Experiment tracking: http://localhost:5000
+## MLflow Experiment Tracking
+
+A local MLflow tracking server stores experiment metadata in SQLite (`mlflow.db`) and model files on disk (`mlartifacts/`). No Docker, PostgreSQL, AWS, or paid account is required.
+
+| What | Where |
+|------|--------|
+| Tracking URI | `http://127.0.0.1:5000` (`MLFLOW_TRACKING_URI` in `.env`) |
+| Experiment name | `energy_prosumers_catboost` (`MLFLOW_EXPERIMENT_NAME` in `.env`) |
+| Metadata | `./mlflow.db` |
+| Artifacts | `./mlartifacts/` |
+| UI | http://127.0.0.1:5000 |
+
+Start the server from the project root and leave that terminal running:
+
+```powershell
+.\start_mlflow_server.ps1
+```
+
+```bash
+bash start_mlflow_server.sh
+```
+
+Check that the client can reach it:
+
+```bash
+python -m src.preds.mlflow_logging --check
+```
+
+### What a run logs
+
+After a successful `fit()`, step 8 of `main_preds` calls `log_catboost_model_to_mlflow` and writes:
+
+- **Parameters** — target, random seed, Optuna trial count, CV splits, debug / scale-trees flags, and the best CatBoost hyperparameters for each segment
+- **Metrics** — holdout power MAE (overall, consumption, production), rolling-origin CV MAE, lag-48 / lag-168 baselines, and per-fold CV MAE
+- **Models** — `consumption` and `production` CatBoost models, plus the raw `.cbm` files under the `models/` artifact folder
+- **Artifacts** — `eval_report.json`, `features.json`, and feature-importance CSVs
+
+If the server is down, training still finishes and the model is saved under `models/`. Reloading with `--skip-training` does not log again.
+
+### Log a model you already saved
+
+```bash
+python -m src.preds.mlflow_logging --model-name catboost_prosumer --run-name my_run
+```
+
+Or from Python after `fit()` / `load()`:
+
+```python
+from src.preds.mlflow_logging import log_catboost_model_to_mlflow
+
+run_id = log_catboost_model_to_mlflow(
+    model=trained_model,
+    X_sample=train_df,
+    run_name='my_run',
+)
+```
+
+`mlflow.db`, `mlartifacts/`, and `mlruns/` are gitignored.
 
 
 ## Results

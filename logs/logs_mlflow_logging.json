@@ -1,0 +1,6 @@
+{"timestamp": "2026-10-25 03:13:22,494", "module": "mlflow_logging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_mlflow_logging.json setup completed"}
+{"timestamp": "2026-10-25 03:13:22,539", "module": "mlflow_logging", "level": "INFO", "message": "Connected to MLflow server: http://127.0.0.1:5000"}
+{"timestamp": "2026-10-25 03:13:23,676", "module": "mlflow_logging", "level": "INFO", "message": "Started MLflow run d463b06b17444f51981bd0157af65c4a in experiment \"energy_prosumers_catboost\""}
+{"timestamp": "2026-10-25 03:13:32,893", "module": "mlflow_logging", "level": "INFO", "message": "Logged model: consumption"}
+{"timestamp": "2026-10-25 03:13:35,446", "module": "mlflow_logging", "level": "INFO", "message": "Logged model: production"}
+{"timestamp": "2026-10-25 03:13:35,535", "module": "mlflow_logging", "level": "INFO", "message": "DONE: Run logged to MLflow (run_id: d463b06b17444f51981bd0157af65c4a)"}

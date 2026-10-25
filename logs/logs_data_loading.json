@@ -1,5 +1,9 @@
-{"timestamp": "2026-10-20 22:59:15,343", "module": "data_loading", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_loading.json setup completed"}
-{"timestamp": "2026-10-20 22:59:54,568", "module": "data_loading", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_loading.json setup completed"}
-{"timestamp": "2026-10-20 23:00:33,336", "module": "data_loading", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_loading.json setup completed"}
-{"timestamp": "2026-10-20 23:01:03,024", "module": "data_loading", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_loading.json setup completed"}
-{"timestamp": "2026-10-21 15:12:37,922", "module": "data_loading", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_loading.json setup completed"}
+{"timestamp": "2026-10-25 02:00:21,764", "module": "data_loading", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_loading.json setup completed"}
+{"timestamp": "2026-10-25 02:00:23,461", "module": "data_loading", "level": "INFO", "message": "Found: train.csv (94.39 MB)"}
+{"timestamp": "2026-10-25 02:00:23,462", "module": "data_loading", "level": "INFO", "message": "Found: client.csv (1.30 MB)"}
+{"timestamp": "2026-10-25 02:00:23,462", "module": "data_loading", "level": "INFO", "message": "Found: electricity_prices.csv (0.73 MB)"}
+{"timestamp": "2026-10-25 02:00:23,463", "module": "data_loading", "level": "INFO", "message": "Found: gas_prices.csv (0.02 MB)"}
+{"timestamp": "2026-10-25 02:00:23,464", "module": "data_loading", "level": "INFO", "message": "Found: historical_weather.csv (172.17 MB)"}
+{"timestamp": "2026-10-25 02:00:23,464", "module": "data_loading", "level": "INFO", "message": "Found: forecast_weather.csv (744.93 MB)"}
+{"timestamp": "2026-10-25 02:00:23,464", "module": "data_loading", "level": "INFO", "message": "Found: weather_station_to_county_mapping.csv (0.00 MB)"}
+{"timestamp": "2026-10-25 02:00:23,464", "module": "data_loading", "level": "INFO", "message": "DONE: All expected files verified"}

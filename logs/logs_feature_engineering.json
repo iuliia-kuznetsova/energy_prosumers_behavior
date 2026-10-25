@@ -1,22 +1,9 @@
-{"timestamp": "2026-10-20 22:59:24,074", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
-{"timestamp": "2026-10-20 22:59:26,520", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48]"}
-{"timestamp": "2026-10-20 22:59:26,536", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48], covariate lags [24, 168]"}
-{"timestamp": "2026-10-20 22:59:55,549", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
-{"timestamp": "2026-10-20 22:59:55,789", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48, 72, 96, 120, 144, 168, 336]"}
-{"timestamp": "2026-10-20 22:59:55,790", "module": "feature_engineering", "level": "INFO", "message": "Datetime features added"}
-{"timestamp": "2026-10-20 22:59:55,790", "module": "feature_engineering", "level": "INFO", "message": "Dropped rows with missing power in train mode"}
-{"timestamp": "2026-10-20 22:59:55,804", "module": "feature_engineering", "level": "INFO", "message": "Missing values handled"}
-{"timestamp": "2026-10-20 22:59:55,819", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48, 72, 96, 120, 144, 168, 336], covariate lags [24, 168]"}
-{"timestamp": "2026-10-20 22:59:55,819", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (144, 71)"}
-{"timestamp": "2026-10-20 22:59:55,819", "module": "feature_engineering", "level": "INFO", "message": "Power saved to C:\\Users\\iulii\\AppData\\Local\\Temp\\enefit_fe_n_dly0_w/power.parquet"}
-{"timestamp": "2026-10-20 23:00:34,326", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
-{"timestamp": "2026-10-20 23:00:34,528", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48, 72, 96, 120, 144, 168, 336]"}
-{"timestamp": "2026-10-20 23:00:34,528", "module": "feature_engineering", "level": "INFO", "message": "Datetime features added"}
-{"timestamp": "2026-10-20 23:00:34,528", "module": "feature_engineering", "level": "INFO", "message": "Dropped rows with missing power in train mode"}
-{"timestamp": "2026-10-20 23:00:34,544", "module": "feature_engineering", "level": "INFO", "message": "Missing values handled"}
-{"timestamp": "2026-10-20 23:00:34,549", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48, 72, 96, 120, 144, 168, 336], covariate lags [24, 168]"}
-{"timestamp": "2026-10-20 23:00:34,562", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (144, 71)"}
-{"timestamp": "2026-10-20 23:00:34,565", "module": "feature_engineering", "level": "INFO", "message": "Power saved to C:\\Users\\iulii\\AppData\\Local\\Temp\\enefit_fe_o7xy3vn0/power.parquet"}
-{"timestamp": "2026-10-20 23:00:34,579", "module": "feature_engineering", "level": "INFO", "message": "DONE: Feature engineering completed. Final shape: (144, 70)"}
-{"timestamp": "2026-10-20 23:01:03,676", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
-{"timestamp": "2026-10-21 15:12:48,324", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
+{"timestamp": "2026-10-25 02:00:23,232", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
+{"timestamp": "2026-10-25 02:00:25,774", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48, 72, 96, 120, 144, 168, 336]"}
+{"timestamp": "2026-10-25 02:00:26,030", "module": "feature_engineering", "level": "INFO", "message": "Datetime features added"}
+{"timestamp": "2026-10-25 02:00:26,049", "module": "feature_engineering", "level": "INFO", "message": "Dropped rows with missing power in train mode"}
+{"timestamp": "2026-10-25 02:00:26,309", "module": "feature_engineering", "level": "INFO", "message": "Missing values handled"}
+{"timestamp": "2026-10-25 02:00:35,014", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48, 72, 96, 120, 144, 168, 336], covariate lags [24, 168]"}
+{"timestamp": "2026-10-25 02:00:35,174", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (1954464, 76)"}
+{"timestamp": "2026-10-25 02:00:35,230", "module": "feature_engineering", "level": "INFO", "message": "Power saved to data\\processed/power.parquet"}
+{"timestamp": "2026-10-25 02:00:35,532", "module": "feature_engineering", "level": "INFO", "message": "DONE: Feature engineering completed. Final shape: (1954464, 70)"}

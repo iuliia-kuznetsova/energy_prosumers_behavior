@@ -124,9 +124,9 @@ celerybeat.pid
 # Environments
 .env
 .venv*
-.venv_bank*
-.venv_bank/
-venv_bank/
+.venv_enefit*
+.venv_enefit/
+venv_enefit/
 
 # Spyder project settings
 .spyderproject
@@ -170,5 +170,15 @@ desktop.ini
 .DS_Store
 Thumbs.db
 mlflow.db
+mlartifacts/
+mlruns/
+
+tests/
+tests*
+tests/test_availability.py
 
 Notes.ipynb
+readme_solution.md
+readmi_modelling.md
+to_dos.md
+

@@ -1,8 +1,7 @@
-{"timestamp": "2026-10-20 22:59:23,869", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
-{"timestamp": "2026-10-20 22:59:27,126", "module": "data_preprocessing", "level": "INFO", "message": "DataPreparation initialized with mode: train"}
-{"timestamp": "2026-10-20 22:59:27,157", "module": "data_preprocessing", "level": "INFO", "message": "Intermediate data saved to C:\\Users\\iulii\\AppData\\Local\\Temp\\enefit_processed_si9a9hh1"}
-{"timestamp": "2026-10-20 22:59:27,157", "module": "data_preprocessing", "level": "INFO", "message": "DONE: Schema conversion completed"}
-{"timestamp": "2026-10-20 22:59:55,517", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
-{"timestamp": "2026-10-20 23:00:34,309", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
-{"timestamp": "2026-10-20 23:01:03,656", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
-{"timestamp": "2026-10-21 15:12:48,062", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
+{"timestamp": "2026-10-25 02:00:23,198", "module": "data_preprocessing", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_preprocessing.json setup completed"}
+{"timestamp": "2026-10-25 02:00:24,213", "module": "data_preprocessing", "level": "INFO", "message": "Raw data loaded from data\\raw"}
+{"timestamp": "2026-10-25 02:00:24,213", "module": "data_preprocessing", "level": "INFO", "message": "Power data: (2018352, 9)"}
+{"timestamp": "2026-10-25 02:00:24,213", "module": "data_preprocessing", "level": "INFO", "message": "Client data: (41919, 7)"}
+{"timestamp": "2026-10-25 02:00:24,213", "module": "data_preprocessing", "level": "INFO", "message": "DataPreparation initialized with mode: train"}
+{"timestamp": "2026-10-25 02:00:24,417", "module": "data_preprocessing", "level": "INFO", "message": "Intermediate data saved to data\\processed"}
+{"timestamp": "2026-10-25 02:00:24,417", "module": "data_preprocessing", "level": "INFO", "message": "DONE: Schema conversion completed"}

@@ -12,13 +12,16 @@
     5. Engineer features (datetime, calendar, lags)
     6. Train CatBoost models (consumption & production)
     7. Evaluate on the holdout months the model did not train on
-    8. Save trained models
+    8. Save trained models and log them to the MLflow tracking server
 
     Usage:
         python -m src.preds.main_preds                    # Full pipeline
         python -m src.preds.main_preds --skip-download    # Skip Kaggle download
         python -m src.preds.main_preds --skip-training    # Skip model training
         python -m src.preds.main_preds --n-trials 20      # Custom Optuna trials
+        python -m src.preds.main_preds --no-mlflow        # Do not log to MLflow
+        python -m src.preds.main_preds --debug            # Train only DEBUG_PREDICTION_UNITS
+        python -m src.preds.main_preds --no-tree-scale    # Keep the unscaled early-stopping tree count
 '''
 
 # ---------- Imports ---------- #
@@ -35,7 +38,11 @@ from src.preds.data_loading import run_data_loading, verify_downloaded_files
 from src.preds.data_preprocessing import DataPreparation, load_raw_data
 from src.preds.data_merging import DataMerging
 from src.preds.feature_engineering import FeatureEngineering
-from src.preds.modelling_catboost import CatBoostRegressorModel, run_modelling
+from src.preds.modelling_catboost import (
+    DEBUG_PREDICTION_UNITS,
+    CatBoostRegressorModel,
+    run_modelling,
+)
 
 
 # ---------- Logging setup ---------- #
@@ -57,14 +64,18 @@ RESULTS_DIR = os.getenv('RESULTS_DIR', './results')
 
 # ---------- Memory Helper ---------- #
 def log_memory_cleanup(step_name: str) -> None:
-    '''Force garbage collection and log cleanup'''
+    '''
+        Force garbage collection and log cleanup
+    '''
     collected = gc.collect()
     logger.info(f'Memory cleanup after {step_name}: {collected} objects collected')
 
 
 # ---------- Argument Parser ---------- #
-def parse_args() -> argparse.Namespace:
-    '''Parse command line arguments'''
+def parse_args(argv: list = None) -> argparse.Namespace:
+    ''' 
+        Parse command line arguments
+    '''
     parser = argparse.ArgumentParser(
         description='Energy Prosumers Behavior Prediction Pipeline'
     )
@@ -93,14 +104,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--debug',
         action='store_true',
-        help='Train and predict only prediction_unit_id 0, 1, 20 and 100'
+        help=(
+            'Train and predict only prediction_unit_id '
+            + ', '.join(str(unit) for unit in DEBUG_PREDICTION_UNITS)
+        ),
     )
     parser.add_argument(
-        '--no-scale-trees',
+        '--no-tree-scale',
         action='store_true',
-        help='Keep the early-stopping tree count instead of scaling it to the full training set'
+        help='Keep the early-stopping tree count instead of scaling it to the full training set',
     )
-    return parser.parse_args()
+    parser.add_argument(
+        '--no-mlflow',
+        action='store_true',
+        help='Do not log the trained model to the MLflow tracking server'
+    )
+    parser.add_argument(
+        '--mlflow-run-name',
+        type=str,
+        default=None,
+        help='MLflow run name (default: catboost_<timestamp>)'
+    )
+    return parser.parse_args() if argv is None else parser.parse_args(argv)
 
 
 # ---------- Pipeline Functions ---------- #
@@ -220,7 +245,7 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
         try:
             model = CatBoostRegressorModel(
                 debug=args.debug,
-                scale_trees=not args.no_scale_trees,
+                scale_trees=not args.no_tree_scale,
             )
             model.load(model_name=args.model_name)
         except FileNotFoundError:
@@ -231,7 +256,7 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
             model = CatBoostRegressorModel(
                 n_trials=args.n_trials,
                 debug=args.debug,
-                scale_trees=not args.no_scale_trees,
+                scale_trees=not args.no_tree_scale,
             )
             model.fit(train_df)
             model.save(args.model_name)
@@ -249,11 +274,10 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
     logger.info('STEP 7: Model Evaluation')
     print('=' * 80)
     
+    # 
     try:
         import json
         if model.eval_report_ is None:
-            # A model saved before this split has no report. Score the holdout rows only,
-            # and say so: that model may have been trained on them.
             from src.preds.modelling_catboost import baseline_power_mae, holdout_mask
             is_holdout = holdout_mask(train_df)
             holdout_stats = model.compute_mae_power(train_df.loc[is_holdout])
@@ -285,6 +309,29 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
         traceback.print_exc()
         sys.exit(1)
     
+    # ========== STEP 8: MLflow Tracking ==========
+    print('\n' + '=' * 80)
+    logger.info('STEP 8: MLflow Tracking')
+    print('=' * 80)
+    
+    if args.no_mlflow:
+        logger.info('Skipping MLflow logging (--no-mlflow flag)')
+    elif args.skip_training:
+        # A reloaded model was already logged when it was trained; use `python -m src.preds.mlflow_logging` to log it again.
+        logger.info('Skipping MLflow logging: no new model was trained')
+    else:
+        from src.preds.mlflow_logging import log_catboost_model_to_mlflow
+        #In case f a tracking failure: it's reported but does not undo the saved model.
+        run_id = log_catboost_model_to_mlflow(
+            model=model,
+            X_sample=train_df,
+            run_name=args.mlflow_run_name,
+        )
+        if run_id:
+            logger.info(f'STEP 8 DONE: Logged to MLflow (run_id: {run_id})')
+        else:
+            logger.warning('STEP 8: MLflow logging skipped or failed; the model is still saved locally')
+    
     # ========== DONE ==========
     print('\n' + '=' * 80)
     logger.info('PIPELINE COMPLETED SUCCESSFULLY!')
@@ -301,7 +348,9 @@ def run_full_pipeline(args: argparse.Namespace) -> None:
 
 # ---------- Main function ---------- #
 def main():
-    '''Main entry point'''
+    '''
+        Main entry point
+    '''
     args = parse_args()
     
     logger.info('=' * 80)
