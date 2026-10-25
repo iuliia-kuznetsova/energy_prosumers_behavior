@@ -244,27 +244,27 @@ After this change the validation MAE will get noticeably *worse*. That is expect
 
 **Fix:** after 5.1 the loop is no longer needed and can be removed. Add a `predict_day(block)` path that reproduces the Kaggle API loop: append new data, rebuild features for the new block, batch-predict, and write `row_id, target`. Run it over the example test files as a smoke test.
 
-### 5.4 HIGH — tuning setup
+### 5.4 HIGH — tuning setup — addressed
 
-- The search space can pair `score_function='Cosine'` with `grow_policy='Lossguide'`, which the CatBoost documentation says not to combine. Optuna does not catch exceptions by default, so one such trial can abort the whole study. Either restrict Cosine to SymmetricTree/Depthwise or pass `catch=(Exception,)`.
-- Ten trials of up to depth 12 × 1000 iterations × 3 folds × 2 models is expensive and still an undersized search. Use early stopping, a seeded `TPESampler(seed=RANDOM_STATE)`, more trials on a time budget, and persist the study (SQLite storage or MLflow).
-- `is_consumption` is in `cat_features` but is constant within each model, so it is useless there.
+- Cosine is suggested only for `SymmetricTree` and `Depthwise`. `Lossguide` is restricted to `L2`. Failed Optuna trials are caught (`catch=(Exception,)`).
+- Each study uses a seeded `TPESampler`, inner-slice early stopping, SQLite persistence (`models/optuna_studies.db` or `OPTUNA_STORAGE`), and an optional `OPTUNA_TIMEOUT_SECONDS` budget. Later runs continue remaining trials instead of starting over.
+- `is_consumption` is no longer a categorical feature. It only routes rows to the consumption or production model.
 
-### 5.5 MEDIUM — target, metric and features
+### 5.5 MEDIUM — target, metric and features — addressed
 
-- **Objective mismatch.** The model minimizes MAE on `capacity_factor`, but the competition scores MAE on power. Pass `sample_weight=installed_capacity` (MAE on the capacity factor weighted by capacity equals MAE on power), or train directly on power with the capacity factor as a feature and compare both.
-- **Normalizer for consumption.** Dividing consumption by solar capacity works, but `eic_count` (number of consumption points, dropped in preprocessing) is a more natural scale for consumption. Try `target / eic_count` for the consumption model, or add both as features.
-- **Clip in target space.** Clip the predicted capacity factor to `[0, upper]` before multiplying, rather than clipping power only.
-- **`abs()` on electricity prices** destroys the sign of negative prices. Negative prices are real (they occur in the example test data) and correlate with sunny, high-production hours. Keep the raw value.
-- **`year` as sin/cos with period 2023** is effectively a label for the year. Use a numeric trend such as months since start, or drop it and let the lags and capacity carry the trend.
-- **Add strong solar features:** solar elevation and azimuth per county centroid and hour (e.g. with `pvlib`), clear-sky irradiance, and `fw_surface_solar_radiation_downwards × installed_capacity`. Also keep the forecast `snowfall` and `cloudcover_low/mid/high`, which are dropped today.
-- **`drop_nulls()` removes the first 30 days of every series** (and the first month of every unit that appears later) only because of the 720-row lag. Let CatBoost handle NaN lags instead, or drop only rows without a target.
-- **Missing values.**
-  - Forward-fill depends on row order.
-  - Median-across-counties fills can hide whole missing days.
-  - `power / installed_capacity` yields `inf` if capacity is 0 (`drop_nulls` does not remove `inf`).
-  - Log missing rates, guard against zero capacity, and add missing-value indicator flags.
-- **Housekeeping.** Remove or rewrite `mlflow_logging.py` for this project. Validate the feature list and order against `metadata.json` before `predict`.
+- Training pools use `sample_weight=installed_capacity`, so MAE on `capacity_factor` equals MAE on power.
+- `eic_count` is kept from `client.csv` and used as a feature alongside `installed_capacity`.
+- Predicted capacity factor is clipped to `[0, segment 99.9th-percentile × 1.1]` before multiplying by capacity.
+- Electricity prices keep their sign. Negative prices are no longer passed through `abs()`.
+- `year_sin` / `year_cos` were replaced by `months_since_start` (months after 2021-09).
+- Solar elevation, azimuth and a simple clear-sky GHI are added per county centroid and hour (`pvlib`). Forecast `snowfall`, `cloudcover_low/mid/high` and `fw_surface_solar_radiation_downwards` are kept, plus `fw_ghi_x_capacity`.
+- After lags, only rows with a finite target are dropped. CatBoost trains with NaN lags.
+- Missing-value handling:
+  - Frames are sorted by `(prediction_unit_id, is_consumption, datetime)` before forward-fill.
+  - `{col}_is_missing` flags are added before median or forward fills.
+  - Zero or non-finite capacity leaves `capacity_factor` null instead of `inf`.
+  - Missing rates are logged after the weather and price joins.
+
 
 ### Recommended fix order
 

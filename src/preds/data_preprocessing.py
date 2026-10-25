@@ -96,6 +96,7 @@ class DataPreparation(BaseEstimator, TransformerMixin):
             'county': pl.Int8,
             'is_business': pl.Boolean,
             'product_type': pl.Int8,
+            'eic_count': pl.Int32,
             'installed_capacity': pl.Float64
         }
 
@@ -122,8 +123,12 @@ class DataPreparation(BaseEstimator, TransformerMixin):
             'forecast_datetime': pl.Datetime,
             'hours_ahead': pl.Int8,
             'temperature': pl.Float32,
+            'cloudcover_high': pl.Float32,
+            'cloudcover_low': pl.Float32,
+            'cloudcover_mid': pl.Float32,
             'cloudcover_total': pl.Float32,
             'total_precipitation': pl.Float32,
+            'snowfall': pl.Float32,
             '10_metre_u_wind_component': pl.Float32,
             '10_metre_v_wind_component': pl.Float32,
             'direct_solar_radiation': pl.Float32,
@@ -208,7 +213,7 @@ class DataPreparation(BaseEstimator, TransformerMixin):
             ['date',
              # Kept so the capacity join can be checked against the target batch.
              'data_block_id',
-             'county', 'is_business', 'product_type', 'installed_capacity']
+             'county', 'is_business', 'product_type', 'eic_count', 'installed_capacity']
         )
         
         self.client_df = (
@@ -272,7 +277,8 @@ class DataPreparation(BaseEstimator, TransformerMixin):
              # Required to select the forecast issue that belongs to the target batch.
              'data_block_id',
              'forecast_datetime', 'hours_ahead', 
-             'temperature', 'cloudcover_total', 'total_precipitation', 
+             'temperature', 'cloudcover_high', 'cloudcover_low', 'cloudcover_mid',
+             'cloudcover_total', 'total_precipitation', 'snowfall',
              '10_metre_u_wind_component', '10_metre_v_wind_component', 
              'direct_solar_radiation', 'surface_solar_radiation_downwards']
         )

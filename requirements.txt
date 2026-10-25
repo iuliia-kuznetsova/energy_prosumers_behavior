@@ -13,6 +13,8 @@ optuna==4.7.0
 
 # Feature engineering
 holidays==0.90
+pvlib==0.13.1
+tzdata==2025.2
 
 # Logging
 python-json-logger==4.0.0

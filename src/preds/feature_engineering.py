@@ -84,7 +84,7 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         and lag features.
         
         Features created:
-        - Cyclical datetime encoding (hour, day, month, year)
+        - Cyclical datetime encoding (hour, day, month) plus months since 2021-09
         - Estonian holidays and day-before-holiday flags
         - DST transition flags
         - Lag features for capacity_factor (48h and older), prices, and observed weather
@@ -208,10 +208,9 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
                     (2 * np.pi * pl.col('day_of_week') / 7).cos().alias('day_of_week_cos'),
                     (2 * np.pi * pl.col('month') / 12).sin().alias('month_sin'),
                     (2 * np.pi * pl.col('month') / 12).cos().alias('month_cos'),
-                    (2 * np.pi * pl.col('year') / 2023).sin().alias('year_sin'),
-                    (2 * np.pi * pl.col('year') / 2023).cos().alias('year_cos')
+                    ((pl.col('year') - 2021) * 12 + pl.col('month') - 9).alias('months_since_start'),
                 ])
-                # Drop raw datetime components
+                # Drop raw datetime components. Year is a numeric trend, not a cycle.
                 .drop(['hour', 'day', 'day_of_week', 'month', 'year'])
         )
 
@@ -274,6 +273,9 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
     def _handle_missing_values(self, df: pl.DataFrame) -> pl.DataFrame:
         '''Handle missing values in the data'''
 
+        # Forward-fill needs chronological order inside each series.
+        df = df.sort(['prediction_unit_id', 'is_consumption', 'datetime'])
+
         if self.mode != 'test':
             # Fill missing power with 0 during DST transitions
             df = df.with_columns(
@@ -299,47 +301,61 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
             )
             logger.info('Dropped rows with missing power in train mode')
 
-        forecast_weather_cols = [
-            'temperature', 'cloudcover_total', 'total_precipitation', 
-            '10_metre_u_wind_component', '10_metre_v_wind_component',
-            'direct_solar_radiation', 'diffuse_solar_radiation'
+        fill_candidates = [
+            col for col in df.columns
+            if col in ('electricity_price', 'gas_price', 'installed_capacity', 'eic_count')
+            or (
+                col.startswith(('fw_', 'hw_'))
+                and not col.endswith('_is_missing')
+                and not col.endswith('_block_id')
+            )
         ]
-        historical_weather_cols = [
-            'temperature', 'surface_pressure',
-            'cloudcover_total', 'total_precipitation',
-            'windspeed_10m', 'winddirection_10m',
-            'direct_solar_radiation', 'diffuse_radiation'
-        ]
+        for col in fill_candidates:
+            flag = f'{col}_is_missing'
+            if flag not in df.columns:
+                df = df.with_columns(pl.col(col).is_null().alias(flag))
 
-        df = (
-            df
-                .with_columns(
-                    # Forward-fill prices
-                    [pl.col('electricity_price').fill_null(strategy='forward')] + 
-                    [pl.col('gas_price').fill_null(strategy='forward')] +
-                    # Forward-fill installed_capacity per prediction unit
-                    [pl.col('installed_capacity')
-                        .fill_null(strategy='forward')
-                        .over(partition_by=(pl.col('prediction_unit_id'), pl.col('is_consumption')))] +
-                    # Forward-fill weather features per prediction unit
-                    [pl.col(f'fw_{col}')
-                        .fill_null(strategy='forward')
-                        .over(partition_by=(pl.col('prediction_unit_id'), pl.col('is_consumption'))) 
-                     for col in forecast_weather_cols] +
-                    [pl.col(f'hw_{col}')
-                        .fill_null(strategy='forward')
-                        .over(partition_by=(pl.col('prediction_unit_id'), pl.col('is_consumption'))) 
-                     for col in historical_weather_cols]
-                )
-        )
+        n = df.height
+        for col in fill_candidates:
+            nulls = df[col].null_count()
+            if nulls:
+                logger.info(f'feature missing {col}: {nulls}/{n} ({100.0 * nulls / n:.2f}%)')
+
+        series_fill = [
+            col for col in fill_candidates
+            if col not in ('electricity_price', 'gas_price')
+        ]
+        fill_exprs = []
+        if 'electricity_price' in df.columns:
+            fill_exprs.append(pl.col('electricity_price').fill_null(strategy='forward'))
+        if 'gas_price' in df.columns:
+            fill_exprs.append(pl.col('gas_price').fill_null(strategy='forward'))
+        fill_exprs.extend([
+            pl.col(col)
+                .fill_null(strategy='forward')
+                .over(partition_by=(pl.col('prediction_unit_id'), pl.col('is_consumption')))
+            for col in series_fill
+        ])
+        if fill_exprs:
+            df = df.with_columns(fill_exprs)
 
         if self.mode != 'test':
-            # Fill missing capacity_factor
+            # Recompute capacity_factor only when capacity is positive and finite.
             df = df.with_columns(
-                pl.when(pl.col('capacity_factor').is_null() & (pl.col('installed_capacity') > 0))  
-                  .then(pl.col('power') / pl.col('installed_capacity'))  
-                  .otherwise(pl.col('capacity_factor'))  
-                  .alias('capacity_factor')  
+                pl.when(
+                    pl.col('capacity_factor').is_null()
+                    & (pl.col('installed_capacity') > 0)
+                    & pl.col('power').is_finite()
+                )
+                .then(pl.col('power') / pl.col('installed_capacity'))
+                .otherwise(pl.col('capacity_factor'))
+                .alias('capacity_factor')
+            )
+            df = df.with_columns(
+                pl.when(pl.col('capacity_factor').is_finite())
+                .then(pl.col('capacity_factor'))
+                .otherwise(None)
+                .alias('capacity_factor')
             )
 
         logger.info('Missing values handled')
@@ -422,9 +438,11 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         if self.mode == 'test' and self.min_test_datetime is not None:
             df = df.filter(pl.col('datetime') >= self.min_test_datetime)
 
-        # Train/retrain only. The longest target lag is 336h, so this removes the first two weeks of each series.
+        # Keep rows whose target is known. CatBoost can train with NaN lags.
         if self.mode != 'test':
-            df = df.drop_nulls()
+            df = df.filter(
+                pl.col('capacity_factor').is_not_null() & pl.col('capacity_factor').is_finite()
+            )
         
         logger.info(f'Rows filtered. Current shape: {df.shape}')
         return df

@@ -9,6 +9,7 @@ from pathlib import Path
 os.environ['PROCESSED_DATA_DIR'] = tempfile.mkdtemp(prefix='enefit_processed_')
 os.environ['MODELS_DIR'] = tempfile.mkdtemp(prefix='enefit_models_')
 
+import numpy as np
 import pandas as pd
 import polars as pl
 import unittest
@@ -16,6 +17,7 @@ import unittest
 from src.preds.data_merging import DataMerging
 from src.preds.feature_engineering import FeatureEngineering
 from src.preds.modelling_catboost import (
+    CAT_FEATURES,
     DEBUG_PREDICTION_UNITS,
     HOLDOUT_START,
     block_day,
@@ -23,6 +25,7 @@ from src.preds.modelling_catboost import (
     limit_to_prediction_units,
     rolling_origin_masks,
     scaled_tree_count,
+    score_functions_for_grow_policy,
     validation_month_starts,
 )
 
@@ -93,6 +96,156 @@ class CliFlagTests(unittest.TestCase):
         args = parse_args(['--debug', '--no-tree-scale'])
         self.assertTrue(args.debug)
         self.assertTrue(args.no_tree_scale)
+
+
+class TuningAndFeatureFixTests(unittest.TestCase):
+    def test_lossguide_cannot_use_cosine(self):
+        self.assertEqual(score_functions_for_grow_policy('Lossguide'), ['L2'])
+        self.assertIn('Cosine', score_functions_for_grow_policy('SymmetricTree'))
+        self.assertNotIn('is_consumption', CAT_FEATURES)
+
+    def test_score_function_search_space_stays_fixed(self):
+        import optuna
+        from src.preds.modelling_catboost import suggest_catboost_params
+
+        def objective(trial):
+            try:
+                params = suggest_catboost_params(trial, 0)
+            except optuna.TrialPruned:
+                return 0.0
+            if params['grow_policy'] == 'Lossguide':
+                self.assertEqual(params['score_function'], 'L2')
+            return 0.0
+
+        study = optuna.create_study()
+        study.optimize(objective, n_trials=20)
+        self.assertTrue(any(trial.state == optuna.trial.TrialState.COMPLETE for trial in study.trials))
+
+    def test_year_cycle_is_replaced_by_a_numeric_trend(self):
+        frame = pl.DataFrame({
+            'datetime': [_dt('2022-03-01 00:00:00')],
+        }).with_columns(pl.col('datetime').cast(pl.Datetime('us')))
+        engineered = FeatureEngineering(mode='train')._add_datetime_features(frame)
+        self.assertIn('months_since_start', engineered.columns)
+        self.assertNotIn('year_sin', engineered.columns)
+        self.assertNotIn('year_cos', engineered.columns)
+        # March 2022 is 6 months after September 2021.
+        self.assertEqual(engineered['months_since_start'][0], 6)
+
+    def test_lag_nulls_do_not_drop_rows_with_a_target(self):
+        hours = list(range(3))
+        base = datetime(2023, 1, 1)
+        frame = pl.DataFrame({
+            'prediction_unit_id': [0] * len(hours),
+            'is_consumption': [True] * len(hours),
+            'datetime': [base + timedelta(hours=hour) for hour in hours],
+            'capacity_factor': [1.0, 2.0, 3.0],
+            'electricity_price': [1.0] * len(hours),
+            'gas_price': [1.0] * len(hours),
+            'hw_temperature': [1.0] * len(hours),
+            'hw_surface_pressure': [1.0] * len(hours),
+            'hw_cloudcover_total': [1.0] * len(hours),
+            'hw_total_precipitation': [1.0] * len(hours),
+            'hw_windspeed_10m': [1.0] * len(hours),
+            'hw_winddirection_10m': [1.0] * len(hours),
+            'hw_direct_solar_radiation': [1.0] * len(hours),
+            'hw_diffuse_radiation': [1.0] * len(hours),
+        }).with_columns(pl.col('datetime').cast(pl.Datetime('us')))
+        engineer = FeatureEngineering(mode='train', n_lag=[48])
+        lagged = engineer._create_lag_features(frame)
+        kept = engineer._drop_rows(lagged)
+        # Three rows have a target. The 48h lag is null, but those rows stay.
+        self.assertEqual(kept.height, 3)
+
+    def test_zero_capacity_does_not_create_infinite_capacity_factor(self):
+        merged = self._zero_capacity_row()
+        self.assertTrue(merged['capacity_factor'][0] is None or np.isnan(merged['capacity_factor'][0]))
+
+    def _zero_capacity_row(self):
+        from src.preds.data_merging import DataMerging
+
+        power = pl.DataFrame({
+            'row_id': [1],
+            'datetime': [_dt('2023-03-03 00:00:00')],
+            'data_block_id': [10],
+            'prediction_unit_id': [0],
+            'is_consumption': [True],
+            'county': [0],
+            'is_business': [False],
+            'product_type': [1],
+            'target': [50.0],
+        })
+        client = pl.DataFrame({
+            'date': [datetime(2023, 3, 1).date()],
+            'data_block_id': [10],
+            'county': [0],
+            'is_business': [False],
+            'product_type': [1],
+            'eic_count': [1],
+            'installed_capacity': [0.0],
+        })
+        electricity = pl.DataFrame({
+            'forecast_date': [_dt('2023-03-02 00:00:00')],
+            'data_block_id': [10],
+            'euros_per_mwh': [10.0],
+        })
+        gas = pl.DataFrame({
+            'forecast_date': [_dt('2023-03-02 00:00:00')],
+            'data_block_id': [10],
+            'lowest_price_per_mwh': [10.0],
+            'highest_price_per_mwh': [20.0],
+        })
+        forecast = pl.DataFrame({
+            'latitude': [59.0],
+            'longitude': [24.0],
+            'data_block_id': [10],
+            'forecast_datetime': [_dt('2023-03-03 00:00:00')],
+            'hours_ahead': [22],
+            'temperature': [1.0],
+            'cloudcover_total': [0.2],
+            'total_precipitation': [0.0],
+            '10_metre_u_wind_component': [0.0],
+            '10_metre_v_wind_component': [0.0],
+            'direct_solar_radiation': [0.0],
+            'surface_solar_radiation_downwards': [0.0],
+        })
+        historical = pl.DataFrame({
+            'datetime': [_dt('2023-03-01 00:00:00')],
+            'data_block_id': [8],
+            'latitude': [59.0],
+            'longitude': [24.0],
+            'temperature': [4.0],
+            'surface_pressure': [1000.0],
+            'rain': [0.0],
+            'snowfall': [0.0],
+            'cloudcover_total': [10.0],
+            'windspeed_10m': [1.0],
+            'winddirection_10m': [1.0],
+            'direct_solar_radiation': [0.0],
+            'diffuse_radiation': [0.0],
+        })
+        mapping = pl.DataFrame({'county': [0], 'latitude': [59.0], 'longitude': [24.0]})
+        frames = {
+            'power_df': power,
+            'client_df': client,
+            'electricity_df': electricity,
+            'gas_df': gas,
+            'forecast_weather_df': forecast,
+            'historical_weather_df': historical,
+            'mapping_df': mapping,
+        }
+        for name, frame in frames.items():
+            casts = []
+            if 'datetime' in frame.columns:
+                casts.append(pl.col('datetime').cast(pl.Datetime('us')))
+            if 'forecast_date' in frame.columns:
+                casts.append(pl.col('forecast_date').cast(pl.Datetime('us')))
+            if 'forecast_datetime' in frame.columns:
+                casts.append(pl.col('forecast_datetime').cast(pl.Datetime('us')))
+            if 'data_block_id' in frame.columns:
+                casts.append(pl.col('data_block_id').cast(pl.Int32))
+            frames[name] = frame.with_columns(casts)
+        return DataMerging(mode='train').fit_transform(frames)
 
 
 class DebugUnitTests(unittest.TestCase):
@@ -194,12 +347,13 @@ class MergeTests(unittest.TestCase):
             'county': [0, 0],
             'is_business': [False, False],
             'product_type': [1, 1],
+            'eic_count': [4, 4],
             'installed_capacity': [100.0, 999.0],
         })
         electricity = pl.DataFrame({
             'forecast_date': [_dt('2023-03-02 00:00:00'), _dt('2023-03-02 12:00:00'), _dt('2023-03-03 00:00:00')],
             'data_block_id': [10, 10, 11],
-            'euros_per_mwh': [40.0, 30.0, -5.0],
+            'euros_per_mwh': [40.0, -30.0, -5.0],
         })
         gas = pl.DataFrame({
             'forecast_date': [_dt('2023-03-02 00:00:00'), _dt('2023-03-03 00:00:00')],
@@ -209,8 +363,12 @@ class MergeTests(unittest.TestCase):
         })
         weather_values = {
             'temperature': [1.0, 9.0, 1.5],
+            'cloudcover_high': [0.1, 0.1, 0.1],
+            'cloudcover_low': [0.1, 0.1, 0.1],
+            'cloudcover_mid': [0.1, 0.1, 0.1],
             'cloudcover_total': [0.2, 0.2, 0.2],
             'total_precipitation': [0.0, 0.0, 0.0],
+            'snowfall': [0.0, 0.0, 0.0],
             '10_metre_u_wind_component': [0.0, 0.0, 0.0],
             '10_metre_v_wind_component': [0.0, 0.0, 0.0],
             'direct_solar_radiation': [0.0, 0.0, 0.0],
@@ -285,6 +443,15 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(midnight['hw_block_id'][0], 8)
         # capacity_factor uses the known capacity: 50 / 100.
         self.assertAlmostEqual(midnight['capacity_factor'][0], 0.5)
+        self.assertEqual(midnight['eic_count'][0], 4)
+        noon = merged.filter(pl.col('datetime') == pl.lit(_dt('2023-03-03 12:00:00')).cast(pl.Datetime('us')))
+        # Negative day-ahead prices are kept. -5 is today's unused price.
+        self.assertEqual(noon['electricity_price'][0], -30.0)
+        self.assertIn('fw_snowfall', merged.columns)
+        self.assertIn('fw_cloudcover_low', merged.columns)
+        self.assertIn('solar_elevation', merged.columns)
+        self.assertIn('fw_ghi_x_capacity', merged.columns)
+        self.assertIn('electricity_price_is_missing', merged.columns)
 
     def test_source_batches_are_not_newer_than_the_target(self):
         merged = self._merged()

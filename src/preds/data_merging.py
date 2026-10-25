@@ -25,13 +25,102 @@
 import os
 import gc
 import copy
+import numpy as np
+import pandas as pd
 import polars as pl
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 from dotenv import load_dotenv
 from sklearn.base import BaseEstimator, TransformerMixin
+from pvlib.irradiance import get_extra_radiation
+from pvlib.solarposition import get_solarposition
 
 from src.logging_setup import setup_logging
+
+
+FORECAST_WEATHER_COLS = [
+    'temperature', 'cloudcover_high', 'cloudcover_low', 'cloudcover_mid',
+    'cloudcover_total', 'total_precipitation', 'snowfall',
+    '10_metre_u_wind_component', '10_metre_v_wind_component',
+    'direct_solar_radiation', 'surface_solar_radiation_downwards',
+]
+HISTORICAL_WEATHER_COLS = [
+    'temperature', 'surface_pressure', 'rain', 'snowfall',
+    'cloudcover_total', 'windspeed_10m', 'winddirection_10m',
+    'direct_solar_radiation', 'diffuse_radiation',
+]
+CLOUD_COVER_COLS = [
+    'fw_cloudcover_total', 'fw_cloudcover_low', 'fw_cloudcover_mid', 'fw_cloudcover_high',
+]
+
+
+def log_missing_rates(df: pl.DataFrame, stage: str) -> None:
+    '''
+        Log the share of nulls in every column that has any.
+    '''
+    n = df.height
+    if n == 0:
+        return
+    for col in df.columns:
+        nulls = df[col].null_count()
+        if nulls:
+            logger.info(f'{stage} missing {col}: {nulls}/{n} ({100.0 * nulls / n:.2f}%)')
+
+
+def add_missing_indicators(df: pl.DataFrame, columns: List[str]) -> pl.DataFrame:
+    '''
+        Add `{col}_is_missing` before a fill, so the model can see that a value was imputed.
+    '''
+    present = [col for col in columns if col in df.columns]
+    if not present:
+        return df
+    return df.with_columns([
+        pl.col(col).is_null().alias(f'{col}_is_missing') for col in present
+    ])
+
+
+def add_solar_position(df: pl.DataFrame, mapping_df: pl.DataFrame) -> pl.DataFrame:
+    '''
+        Solar elevation, azimuth and a simple clear-sky GHI per county centroid and hour.
+    '''
+    if 'county' not in df.columns or mapping_df is None or mapping_df.is_empty():
+        return df
+    centroids = (
+        mapping_df
+            .drop_nulls(['county', 'latitude', 'longitude'])
+            .group_by('county')
+            .agg(
+                pl.col('latitude').mean().alias('latitude'),
+                pl.col('longitude').mean().alias('longitude'),
+            )
+            .to_pandas()
+    )
+    if centroids.empty:
+        return df
+    unique_times = pd.DatetimeIndex(pd.to_datetime(df['datetime'].unique().to_list()))
+    localized = unique_times.tz_localize(
+        'Europe/Tallinn', ambiguous='NaT', nonexistent='NaT'
+    )
+    parts = []
+    extra = get_extra_radiation(unique_times)
+    for row in centroids.itertuples(index=False):
+        solpos = get_solarposition(localized, row.latitude, row.longitude)
+        zenith = np.radians(solpos['apparent_zenith'].to_numpy())
+        clearsky = np.maximum(np.asarray(extra, dtype=float) * np.cos(zenith), 0)
+        clearsky = np.where(np.isfinite(zenith), clearsky, np.nan)
+        parts.append(pd.DataFrame({
+            'county': row.county,
+            'datetime': unique_times,
+            'solar_elevation': solpos['apparent_elevation'].to_numpy(),
+            'solar_azimuth': solpos['azimuth'].to_numpy(),
+            'clearsky_ghi': clearsky,
+        }))
+    solar = pl.from_pandas(pd.concat(parts, ignore_index=True))
+    solar = solar.with_columns([
+        pl.col('county').cast(df.schema['county']),
+        pl.col('datetime').cast(df.schema['datetime']),
+    ])
+    return df.join(solar, on=['county', 'datetime'], how='left')
 
 
 # ---------- Logging setup ---------- #
@@ -128,7 +217,7 @@ class DataMerging(BaseEstimator, TransformerMixin):
             self.electricity_df
                 .with_columns([
                     (pl.col('forecast_date') + pl.duration(days=1)).alias('datetime'),
-                    pl.col('euros_per_mwh').abs().alias('electricity_price')
+                    pl.col('euros_per_mwh').alias('electricity_price')
                 ])
                 # One price per hour; a duplicate hour would multiply the target rows.
                 .unique(subset=['datetime'], keep='last')
@@ -170,11 +259,9 @@ class DataMerging(BaseEstimator, TransformerMixin):
         )
         logger.info(f'After gas join: {self.df.shape}')
 
-        # Process forecast weather
+        # Process forecast weather. Keep only columns that are actually on the frame.
         forecast_weather_cols = [
-            'temperature', 'cloudcover_total', 'total_precipitation', 
-            '10_metre_u_wind_component', '10_metre_v_wind_component', 
-            'direct_solar_radiation', 'surface_solar_radiation_downwards'
+            col for col in FORECAST_WEATHER_COLS if col in self.forecast_weather_df.columns
         ]
 
         # The day each batch is asked to predict. One batch is one calendar day.
@@ -206,49 +293,69 @@ class DataMerging(BaseEstimator, TransformerMixin):
         self.forecast_weather_df = (
             self.forecast_weather_df
                 .group_by(['county', 'datetime', 'data_block_id'])
-                .agg([pl.mean(col).alias(f'fw_{col}') for col in forecast_weather_cols])  
+                .agg([pl.mean(col).alias(f'fw_{col}') for col in forecast_weather_cols])
+        )
+        present_cloud = [col for col in CLOUD_COVER_COLS if col in self.forecast_weather_df.columns]
+        radiation_exprs = []
+        if 'fw_direct_solar_radiation' in self.forecast_weather_df.columns:
+            radiation_exprs.append(pl.col('fw_direct_solar_radiation').abs())
+        if (
+            'fw_surface_solar_radiation_downwards' in self.forecast_weather_df.columns
+            and 'fw_direct_solar_radiation' in self.forecast_weather_df.columns
+        ):
+            radiation_exprs.append(
+                pl.when(
+                    (pl.col('fw_surface_solar_radiation_downwards').abs()
+                     - pl.col('fw_direct_solar_radiation').abs()) < 0
+                )
+                .then(0)
+                .otherwise(
+                    pl.col('fw_surface_solar_radiation_downwards').abs()
+                    - pl.col('fw_direct_solar_radiation').abs()
+                )
+                .alias('fw_diffuse_solar_radiation')
+            )
+        if 'fw_total_precipitation' in self.forecast_weather_df.columns:
+            radiation_exprs.append(
+                (pl.col('fw_total_precipitation') * 1000).abs().alias('fw_total_precipitation')
+            )
+        self.forecast_weather_df = (
+            self.forecast_weather_df
                 .with_columns([
-                    # Cap cloud cover at 100
-                    pl.when(pl.col('fw_cloudcover_total') * 100 > 100)
-                        .then(100)
-                        .otherwise(pl.col('fw_cloudcover_total') * 100),
-                    pl.col('fw_direct_solar_radiation').abs(),
-                    # Compute diffuse solar radiation
-                    (pl.when((pl.col('fw_surface_solar_radiation_downwards').abs() - pl.col('fw_direct_solar_radiation').abs()) < 0)
-                        .then(0)
-                        .otherwise(pl.col('fw_surface_solar_radiation_downwards').abs() - pl.col('fw_direct_solar_radiation').abs()))
-                        .alias('fw_diffuse_solar_radiation'),
-                    (pl.col('fw_total_precipitation') * 1000).abs()
+                    *[
+                        pl.when(pl.col(col) * 100 > 100)
+                            .then(100)
+                            .otherwise(pl.col(col) * 100)
+                            .alias(col)
+                        for col in present_cloud
+                    ],
+                    *radiation_exprs,
+                    pl.col('data_block_id').alias('fw_block_id'),
                 ])
-                # Copy of the issue batch, kept after the join so it can be audited.
-                .with_columns(pl.col('data_block_id').alias('fw_block_id'))
-        ) 
+        )
         
         # Join with forecast weather:
         # Same batch and same valid time, the day-ahead forecast according to the competition rules.
-        self.df = (
-            self.df
-                .join(
-                    self.forecast_weather_df, 
-                    how='left',
-                    on=['county', 'datetime', 'data_block_id']
-                )
-                .with_columns(
-                    [pl.col(f'fw_{col}').fill_null(pl.col(f'fw_{col}').median().over('datetime')) 
-                     for col in forecast_weather_cols] + 
-                    [pl.col('fw_diffuse_solar_radiation').fill_null(
-                        pl.col('fw_diffuse_solar_radiation').median().over('datetime'))]
-                    # A county gap is filled from other counties at the same hour, which is the same batch.
-                    + [pl.col('fw_block_id').fill_null(pl.col('fw_block_id').max().over('datetime'))]
-                )  
+        fw_value_cols = [
+            col for col in self.forecast_weather_df.columns
+            if col.startswith('fw_') and col != 'fw_block_id'
+        ]
+        self.df = self.df.join(
+            self.forecast_weather_df,
+            how='left',
+            on=['county', 'datetime', 'data_block_id'],
+        )
+        self.df = add_missing_indicators(self.df, fw_value_cols)
+        log_missing_rates(self.df.select(fw_value_cols), 'forecast weather')
+        self.df = self.df.with_columns(
+            [pl.col(col).fill_null(pl.col(col).median().over('datetime')) for col in fw_value_cols]
+            + [pl.col('fw_block_id').fill_null(pl.col('fw_block_id').max().over('datetime'))]
         )
         logger.info(f'After forecast weather join: {self.df.shape}')
 
         # Process historical weather
         historical_weather_cols = [
-            'temperature', 'surface_pressure', 'rain', 'snowfall', 
-            'cloudcover_total', 'windspeed_10m', 'winddirection_10m', 
-            'direct_solar_radiation', 'diffuse_radiation'
+            col for col in HISTORICAL_WEATHER_COLS if col in self.historical_weather_df.columns
         ]
         
         self.historical_weather_df = (
@@ -279,54 +386,77 @@ class DataMerging(BaseEstimator, TransformerMixin):
         
         # Join with historical weather:
         # Join on the shifted timestamp only. The observation's own batch is an earlier one.
-        self.df = (
-            self.df
-                .join(
-                    self.historical_weather_df,
-                    how='left',
-                    on=['county', 'datetime']
-                )
-                .with_columns(
-                    [pl.col(f'hw_{col}').fill_null(pl.col(f'hw_{col}').median().over('datetime')) 
-                     for col in historical_weather_cols] +
-                    [pl.col('hw_total_precipitation').fill_null(
-                        pl.col('hw_total_precipitation').median().over('datetime'))]
-                    # Same-hour fill stays inside observations that were already shifted by 48h.
-                    + [pl.col('hw_block_id').fill_null(pl.col('hw_block_id').max().over('datetime'))]
-                ) 
+        self.df = self.df.join(
+            self.historical_weather_df,
+            how='left',
+            on=['county', 'datetime'],
+        )
+        hw_value_cols = [
+            col for col in self.df.columns
+            if col.startswith('hw_') and col != 'hw_block_id' and not col.endswith('_is_missing')
+        ]
+        self.df = add_missing_indicators(self.df, hw_value_cols)
+        log_missing_rates(self.df.select(hw_value_cols), 'historical weather')
+        self.df = self.df.with_columns(
+            [pl.col(col).fill_null(pl.col(col).median().over('datetime')) for col in hw_value_cols]
+            + [pl.col('hw_block_id').fill_null(pl.col('hw_block_id').max().over('datetime'))]
         )
         logger.info(f'After historical weather join: {self.df.shape}')
 
-        # Generate capacity_factor and define column order:
-        # capacity_factor uses the capacity sitting on the row, which is the 2-day-old one according to the competition rules.
-        # Zero or missing capacity would make the ratio infinite, so those rows stay null and are dropped later.
-        self.df = (
-            self.df
-                .with_columns([
-                    pl.when(pl.col('installed_capacity') > 0)
-                        .then(pl.col('power') / pl.col('installed_capacity'))
-                        .otherwise(None)
-                        .alias('capacity_factor')
-                ])
-                .select(
-                    'row_id', 'datetime', 'data_block_id', 'prediction_unit_id', 'is_consumption', 
-                    'county', 'is_business', 'product_type',
-                    'capacity_factor', 'power', 'installed_capacity', 
-                    'electricity_price', 'gas_price',
-                    'fw_temperature', 'fw_cloudcover_total', 
-                    'fw_total_precipitation', 
-                    'fw_10_metre_u_wind_component', 'fw_10_metre_v_wind_component',
-                    'fw_direct_solar_radiation', 'fw_diffuse_solar_radiation',
-                    'hw_temperature', 'hw_surface_pressure',
-                    'hw_cloudcover_total', 'hw_total_precipitation',
-                    'hw_windspeed_10m', 'hw_winddirection_10m',
-                    'hw_direct_solar_radiation', 'hw_diffuse_radiation',
-                    # Source batches. Feature engineering drops these before the model sees the frame.
-                    'client_block_id', 'electricity_block_id', 'gas_block_id',
-                    'fw_block_id', 'hw_block_id'
-                ) 
-                .sort('datetime')
+        self.df = add_missing_indicators(
+            self.df, ['electricity_price', 'gas_price', 'installed_capacity', 'eic_count']
         )
+        log_missing_rates(
+            self.df.select([
+                col for col in ['electricity_price', 'gas_price', 'installed_capacity', 'eic_count']
+                if col in self.df.columns
+            ]),
+            'prices and capacity',
+        )
+
+        self.df = add_solar_position(self.df, self.mapping_df)
+        if 'fw_surface_solar_radiation_downwards' in self.df.columns:
+            self.df = self.df.with_columns(
+                (pl.col('fw_surface_solar_radiation_downwards') * pl.col('installed_capacity'))
+                .alias('fw_ghi_x_capacity')
+            )
+
+        # Generate capacity_factor:
+        # Zero or missing capacity would make the ratio infinite, so those rows stay null.
+        self.df = self.df.with_columns(
+            pl.when((pl.col('installed_capacity') > 0) & pl.col('power').is_finite())
+                .then(pl.col('power') / pl.col('installed_capacity'))
+                .otherwise(None)
+                .alias('capacity_factor')
+        )
+        self.df = self.df.with_columns(
+            pl.when(pl.col('capacity_factor').is_finite())
+                .then(pl.col('capacity_factor'))
+                .otherwise(None)
+                .alias('capacity_factor')
+        )
+
+        core = [
+            'row_id', 'datetime', 'data_block_id', 'prediction_unit_id', 'is_consumption',
+            'county', 'is_business', 'product_type',
+            'capacity_factor', 'power', 'installed_capacity', 'eic_count',
+            'electricity_price', 'gas_price',
+            'solar_elevation', 'solar_azimuth', 'clearsky_ghi', 'fw_ghi_x_capacity',
+        ]
+        keep = [col for col in core if col in self.df.columns]
+        keep += [
+            col for col in self.df.columns
+            if col.startswith(('fw_', 'hw_')) and col not in keep
+        ]
+        keep += [col for col in self.df.columns if col.endswith('_is_missing') and col not in keep]
+        keep += [
+            col for col in [
+                'client_block_id', 'electricity_block_id', 'gas_block_id',
+                'fw_block_id', 'hw_block_id',
+            ]
+            if col in self.df.columns and col not in keep
+        ]
+        self.df = self.df.select(keep).sort(['prediction_unit_id', 'is_consumption', 'datetime'])
 
         logger.info(f'DONE: Data merging completed. Final shape: {self.df.shape}')
         return self.df

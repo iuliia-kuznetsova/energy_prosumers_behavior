@@ -7,3 +7,63 @@
 {"timestamp": "2026-10-25 02:00:35,174", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (1954464, 76)"}
 {"timestamp": "2026-10-25 02:00:35,230", "module": "feature_engineering", "level": "INFO", "message": "Power saved to data\\processed/power.parquet"}
 {"timestamp": "2026-10-25 02:00:35,532", "module": "feature_engineering", "level": "INFO", "message": "DONE: Feature engineering completed. Final shape: (1954464, 70)"}
+{"timestamp": "2026-10-25 12:24:56,125", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
+{"timestamp": "2026-10-25 12:25:11,138", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48]"}
+{"timestamp": "2026-10-25 12:25:11,164", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48], covariate lags [24, 168]"}
+{"timestamp": "2026-10-25 12:25:14,401", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48]"}
+{"timestamp": "2026-10-25 12:25:14,422", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48], covariate lags [24, 168]"}
+{"timestamp": "2026-10-25 12:25:14,431", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (3, 37)"}
+{"timestamp": "2026-10-25 12:25:14,431", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48, 72, 96, 120, 144, 168, 336]"}
+{"timestamp": "2026-10-25 12:25:14,439", "module": "feature_engineering", "level": "INFO", "message": "Datetime features added"}
+{"timestamp": "2026-10-25 13:46:58,005", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
+{"timestamp": "2026-10-25 13:47:03,015", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48, 72, 96, 120, 144, 168, 336]"}
+{"timestamp": "2026-10-25 13:47:03,211", "module": "feature_engineering", "level": "INFO", "message": "Datetime features added"}
+{"timestamp": "2026-10-25 13:47:03,520", "module": "feature_engineering", "level": "INFO", "message": "Dropped rows with missing power in train mode"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing installed_capacity: 2784/2012496 (0.14%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing eic_count: 2784/2012496 (0.14%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing electricity_price: 268/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_ghi_x_capacity: 3050/2012496 (0.15%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_temperature: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_high: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_low: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_mid: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_total: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_total_precipitation: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_snowfall: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_10_metre_u_wind_component: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,526", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_10_metre_v_wind_component: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,531", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_direct_solar_radiation: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,531", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_surface_solar_radiation_downwards: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,531", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_diffuse_solar_radiation: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 13:47:03,778", "module": "feature_engineering", "level": "INFO", "message": "Missing values handled"}
+{"timestamp": "2026-10-25 13:47:09,968", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48, 72, 96, 120, 144, 168, 336], covariate lags [24, 168]"}
+{"timestamp": "2026-10-25 13:47:10,103", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (2011728, 114)"}
+{"timestamp": "2026-10-25 13:47:10,199", "module": "feature_engineering", "level": "INFO", "message": "Power saved to data\\processed/power.parquet"}
+{"timestamp": "2026-10-25 13:47:10,648", "module": "feature_engineering", "level": "INFO", "message": "DONE: Feature engineering completed. Final shape: (2011728, 108)"}
+{"timestamp": "2026-10-25 14:15:20,832", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
+{"timestamp": "2026-10-25 14:16:32,178", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}
+{"timestamp": "2026-10-25 14:16:36,981", "module": "feature_engineering", "level": "INFO", "message": "FeatureEngineering initialized with mode: train, lags: [48, 72, 96, 120, 144, 168, 336]"}
+{"timestamp": "2026-10-25 14:16:37,099", "module": "feature_engineering", "level": "INFO", "message": "Datetime features added"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "Dropped rows with missing power in train mode"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing installed_capacity: 2784/2012496 (0.14%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing eic_count: 2784/2012496 (0.14%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing electricity_price: 268/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_ghi_x_capacity: 3050/2012496 (0.15%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_temperature: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_high: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_low: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,229", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_mid: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,239", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_cloudcover_total: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,239", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_total_precipitation: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,239", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_snowfall: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,239", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_10_metre_u_wind_component: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,240", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_10_metre_v_wind_component: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,241", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_direct_solar_radiation: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,241", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_surface_solar_radiation_downwards: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,241", "module": "feature_engineering", "level": "INFO", "message": "feature missing fw_diffuse_solar_radiation: 266/2012496 (0.01%)"}
+{"timestamp": "2026-10-25 14:16:37,427", "module": "feature_engineering", "level": "INFO", "message": "Missing values handled"}
+{"timestamp": "2026-10-25 14:16:43,176", "module": "feature_engineering", "level": "INFO", "message": "Lag features created: target lags [48, 72, 96, 120, 144, 168, 336], covariate lags [24, 168]"}
+{"timestamp": "2026-10-25 14:16:43,324", "module": "feature_engineering", "level": "INFO", "message": "Rows filtered. Current shape: (2011728, 114)"}
+{"timestamp": "2026-10-25 14:16:43,403", "module": "feature_engineering", "level": "INFO", "message": "Power saved to data\\processed/power.parquet"}
+{"timestamp": "2026-10-25 14:16:43,712", "module": "feature_engineering", "level": "INFO", "message": "DONE: Feature engineering completed. Final shape: (2011728, 108)"}
+{"timestamp": "2026-10-25 20:16:18,115", "module": "feature_engineering", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_feature_engineering.json setup completed"}

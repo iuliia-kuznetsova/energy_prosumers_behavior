@@ -7,3 +7,130 @@
 {"timestamp": "2026-10-25 02:00:24,940", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2018352, 26)"}
 {"timestamp": "2026-10-25 02:00:25,252", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2018352, 37)"}
 {"timestamp": "2026-10-25 02:00:25,312", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2018352, 33)"}
+{"timestamp": "2026-10-25 12:24:55,476", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-25 12:25:11,186", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-25 12:25:11,189", "module": "data_merging", "level": "INFO", "message": "Power data processed: (2, 10)"}
+{"timestamp": "2026-10-25 12:25:11,189", "module": "data_merging", "level": "INFO", "message": "After client join: (2, 13)"}
+{"timestamp": "2026-10-25 12:25:11,189", "module": "data_merging", "level": "INFO", "message": "After electricity join: (2, 15)"}
+{"timestamp": "2026-10-25 12:25:11,189", "module": "data_merging", "level": "INFO", "message": "After gas join: (2, 17)"}
+{"timestamp": "2026-10-25 12:25:11,221", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2, 42)"}
+{"timestamp": "2026-10-25 12:25:11,224", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2, 63)"}
+{"timestamp": "2026-10-25 12:25:11,400", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2, 71)"}
+{"timestamp": "2026-10-25 12:25:11,416", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-25 12:25:11,416", "module": "data_merging", "level": "INFO", "message": "Power data processed: (2, 10)"}
+{"timestamp": "2026-10-25 12:25:11,421", "module": "data_merging", "level": "INFO", "message": "After client join: (2, 13)"}
+{"timestamp": "2026-10-25 12:25:11,422", "module": "data_merging", "level": "INFO", "message": "After electricity join: (2, 15)"}
+{"timestamp": "2026-10-25 12:25:11,422", "module": "data_merging", "level": "INFO", "message": "After gas join: (2, 17)"}
+{"timestamp": "2026-10-25 12:25:11,432", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2, 42)"}
+{"timestamp": "2026-10-25 12:25:11,439", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2, 63)"}
+{"timestamp": "2026-10-25 12:25:11,468", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2, 71)"}
+{"timestamp": "2026-10-25 12:25:13,873", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-25 12:25:13,873", "module": "data_merging", "level": "INFO", "message": "Power data processed: (27216, 10)"}
+{"timestamp": "2026-10-25 12:25:13,889", "module": "data_merging", "level": "INFO", "message": "After client join: (27216, 13)"}
+{"timestamp": "2026-10-25 12:25:13,889", "module": "data_merging", "level": "INFO", "message": "After electricity join: (27216, 15)"}
+{"timestamp": "2026-10-25 12:25:13,889", "module": "data_merging", "level": "INFO", "message": "After gas join: (27216, 17)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_temperature: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_high: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_low: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_mid: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_total: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_total_precipitation: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_snowfall: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_10_metre_u_wind_component: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_10_metre_v_wind_component: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_direct_solar_radiation: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_surface_solar_radiation_downwards: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,922", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_diffuse_solar_radiation: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,939", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (27216, 42)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_temperature: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_surface_pressure: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_rain: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_snowfall: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_cloudcover_total: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_windspeed_10m: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_winddirection_10m: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_direct_solar_radiation: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_diffuse_radiation: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,955", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_total_precipitation: 432/27216 (1.59%)"}
+{"timestamp": "2026-10-25 12:25:13,968", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (27216, 63)"}
+{"timestamp": "2026-10-25 12:25:14,383", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (27216, 71)"}
+{"timestamp": "2026-10-25 12:25:14,455", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-25 12:25:14,455", "module": "data_merging", "level": "INFO", "message": "Power data processed: (1, 10)"}
+{"timestamp": "2026-10-25 12:25:14,455", "module": "data_merging", "level": "INFO", "message": "After client join: (1, 13)"}
+{"timestamp": "2026-10-25 12:25:14,455", "module": "data_merging", "level": "INFO", "message": "After electricity join: (1, 15)"}
+{"timestamp": "2026-10-25 12:25:14,472", "module": "data_merging", "level": "INFO", "message": "After gas join: (1, 17)"}
+{"timestamp": "2026-10-25 12:25:14,488", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (1, 34)"}
+{"timestamp": "2026-10-25 12:25:14,488", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (1, 55)"}
+{"timestamp": "2026-10-25 12:25:14,528", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (1, 63)"}
+{"timestamp": "2026-10-25 13:46:57,981", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-25 13:46:59,895", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-25 13:46:59,905", "module": "data_merging", "level": "INFO", "message": "Power data processed: (2018352, 10)"}
+{"timestamp": "2026-10-25 13:46:59,980", "module": "data_merging", "level": "INFO", "message": "After client join: (2018352, 13)"}
+{"timestamp": "2026-10-25 13:47:00,037", "module": "data_merging", "level": "INFO", "message": "After electricity join: (2018352, 15)"}
+{"timestamp": "2026-10-25 13:47:00,057", "module": "data_merging", "level": "INFO", "message": "After gas join: (2018352, 17)"}
+{"timestamp": "2026-10-25 13:47:00,473", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_temperature: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,474", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_high: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,474", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_low: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,474", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_mid: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,474", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_total: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,474", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_total_precipitation: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,475", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_snowfall: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,475", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_10_metre_u_wind_component: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,475", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_10_metre_v_wind_component: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,475", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_direct_solar_radiation: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,475", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_surface_solar_radiation_downwards: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,475", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_diffuse_solar_radiation: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 13:47:00,604", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2018352, 42)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_temperature: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_surface_pressure: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_rain: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_snowfall: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_cloudcover_total: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_windspeed_10m: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,805", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_winddirection_10m: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,811", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_direct_solar_radiation: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,811", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_diffuse_radiation: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,811", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_total_precipitation: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 13:47:00,918", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2018352, 63)"}
+{"timestamp": "2026-10-25 13:47:00,918", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing electricity_price: 3196/2018352 (0.16%)"}
+{"timestamp": "2026-10-25 13:47:00,918", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing gas_price: 2928/2018352 (0.15%)"}
+{"timestamp": "2026-10-25 13:47:00,918", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing installed_capacity: 8640/2018352 (0.43%)"}
+{"timestamp": "2026-10-25 13:47:00,918", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing eic_count: 8640/2018352 (0.43%)"}
+{"timestamp": "2026-10-25 13:47:02,600", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2018352, 71)"}
+{"timestamp": "2026-10-25 14:15:20,805", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-25 14:16:32,151", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}
+{"timestamp": "2026-10-25 14:16:33,887", "module": "data_merging", "level": "INFO", "message": "DataMerging initialized with mode: train"}
+{"timestamp": "2026-10-25 14:16:33,897", "module": "data_merging", "level": "INFO", "message": "Power data processed: (2018352, 10)"}
+{"timestamp": "2026-10-25 14:16:33,958", "module": "data_merging", "level": "INFO", "message": "After client join: (2018352, 13)"}
+{"timestamp": "2026-10-25 14:16:33,992", "module": "data_merging", "level": "INFO", "message": "After electricity join: (2018352, 15)"}
+{"timestamp": "2026-10-25 14:16:34,014", "module": "data_merging", "level": "INFO", "message": "After gas join: (2018352, 17)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_temperature: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_high: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_low: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_mid: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_cloudcover_total: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_total_precipitation: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_snowfall: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_10_metre_u_wind_component: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_10_metre_v_wind_component: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_direct_solar_radiation: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_surface_solar_radiation_downwards: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,471", "module": "data_merging", "level": "INFO", "message": "forecast weather missing fw_diffuse_solar_radiation: 33766/2018352 (1.67%)"}
+{"timestamp": "2026-10-25 14:16:34,617", "module": "data_merging", "level": "INFO", "message": "After forecast weather join: (2018352, 42)"}
+{"timestamp": "2026-10-25 14:16:34,817", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_temperature: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_surface_pressure: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_rain: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_snowfall: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_cloudcover_total: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_windspeed_10m: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_winddirection_10m: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_direct_solar_radiation: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_diffuse_radiation: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,821", "module": "data_merging", "level": "INFO", "message": "historical weather missing hw_total_precipitation: 36384/2018352 (1.80%)"}
+{"timestamp": "2026-10-25 14:16:34,937", "module": "data_merging", "level": "INFO", "message": "After historical weather join: (2018352, 63)"}
+{"timestamp": "2026-10-25 14:16:34,937", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing electricity_price: 3196/2018352 (0.16%)"}
+{"timestamp": "2026-10-25 14:16:34,937", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing gas_price: 2928/2018352 (0.15%)"}
+{"timestamp": "2026-10-25 14:16:34,941", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing installed_capacity: 8640/2018352 (0.43%)"}
+{"timestamp": "2026-10-25 14:16:34,941", "module": "data_merging", "level": "INFO", "message": "prices and capacity missing eic_count: 8640/2018352 (0.43%)"}
+{"timestamp": "2026-10-25 14:16:36,557", "module": "data_merging", "level": "INFO", "message": "DONE: Data merging completed. Final shape: (2018352, 71)"}
+{"timestamp": "2026-10-25 20:16:17,577", "module": "data_merging", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_data_merging.json setup completed"}

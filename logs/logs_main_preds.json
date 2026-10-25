@@ -36,3 +36,68 @@
 {"timestamp": "2026-10-25 03:13:35,645", "module": "main_preds", "level": "INFO", "message": "PIPELINE COMPLETED SUCCESSFULLY!"}
 {"timestamp": "2026-10-25 03:13:35,645", "module": "main_preds", "level": "INFO", "message": "Model saved to: ./models/catboost_prosumer"}
 {"timestamp": "2026-10-25 03:13:35,645", "module": "main_preds", "level": "INFO", "message": "Holdout MAE (Power): 146.2075"}
+{"timestamp": "2026-10-25 12:25:04,840", "module": "main_preds", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_main_preds.json setup completed"}
+{"timestamp": "2026-10-25 13:46:58,367", "module": "main_preds", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_main_preds.json setup completed"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "================================================================================"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Energy Prosumers Behavior Prediction Pipeline"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "================================================================================"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Arguments: {'skip_download': True, 'skip_training': False, 'n_trials': 10, 'model_name': 'catboost_prosumer', 'debug': True, 'no_tree_scale': True, 'no_mlflow': False, 'mlflow_run_name': None}"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "STEP 1: Setting up directories"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./data/raw"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./data/processed"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./models"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./results"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "STEP 1 DONE: Setup completed"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "STEP 2: Data Loading"}
+{"timestamp": "2026-10-25 13:46:58,377", "module": "main_preds", "level": "INFO", "message": "Skipping download (--skip-download flag)"}
+{"timestamp": "2026-10-25 13:46:58,452", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after data_loading: 39 objects collected"}
+{"timestamp": "2026-10-25 13:46:58,452", "module": "main_preds", "level": "INFO", "message": "STEP 2 DONE: Data loading completed"}
+{"timestamp": "2026-10-25 13:46:58,452", "module": "main_preds", "level": "INFO", "message": "STEP 3: Data Preprocessing"}
+{"timestamp": "2026-10-25 13:46:59,892", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after preprocessing: 0 objects collected"}
+{"timestamp": "2026-10-25 13:46:59,894", "module": "main_preds", "level": "INFO", "message": "STEP 3 DONE: Data preprocessing completed"}
+{"timestamp": "2026-10-25 13:46:59,895", "module": "main_preds", "level": "INFO", "message": "STEP 4: Data Merging"}
+{"timestamp": "2026-10-25 13:47:02,650", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after merging: 30 objects collected"}
+{"timestamp": "2026-10-25 13:47:02,650", "module": "main_preds", "level": "INFO", "message": "STEP 4 DONE: Data merging completed"}
+{"timestamp": "2026-10-25 13:47:02,650", "module": "main_preds", "level": "INFO", "message": "STEP 5: Feature Engineering"}
+{"timestamp": "2026-10-25 13:47:20,468", "module": "main_preds", "level": "INFO", "message": "Features saved: (2011728, 108)"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after feature_engineering: 0 objects collected"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "main_preds", "level": "INFO", "message": "STEP 5 DONE: Feature engineering completed"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "main_preds", "level": "INFO", "message": "STEP 6: Model Training"}
+{"timestamp": "2026-10-25 14:16:32,508", "module": "main_preds", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_main_preds.json setup completed"}
+{"timestamp": "2026-10-25 14:16:32,511", "module": "main_preds", "level": "INFO", "message": "================================================================================"}
+{"timestamp": "2026-10-25 14:16:32,511", "module": "main_preds", "level": "INFO", "message": "Energy Prosumers Behavior Prediction Pipeline"}
+{"timestamp": "2026-10-25 14:16:32,511", "module": "main_preds", "level": "INFO", "message": "================================================================================"}
+{"timestamp": "2026-10-25 14:16:32,511", "module": "main_preds", "level": "INFO", "message": "Arguments: {'skip_download': True, 'skip_training': False, 'n_trials': 10, 'model_name': 'catboost_prosumer', 'debug': True, 'no_tree_scale': True, 'no_mlflow': False, 'mlflow_run_name': None}"}
+{"timestamp": "2026-10-25 14:16:32,511", "module": "main_preds", "level": "INFO", "message": "STEP 1: Setting up directories"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./data/raw"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./data/processed"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./models"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "Directory ready: ./results"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "STEP 1 DONE: Setup completed"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "STEP 2: Data Loading"}
+{"timestamp": "2026-10-25 14:16:32,518", "module": "main_preds", "level": "INFO", "message": "Skipping download (--skip-download flag)"}
+{"timestamp": "2026-10-25 14:16:32,576", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after data_loading: 39 objects collected"}
+{"timestamp": "2026-10-25 14:16:32,577", "module": "main_preds", "level": "INFO", "message": "STEP 2 DONE: Data loading completed"}
+{"timestamp": "2026-10-25 14:16:32,577", "module": "main_preds", "level": "INFO", "message": "STEP 3: Data Preprocessing"}
+{"timestamp": "2026-10-25 14:16:33,887", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after preprocessing: 0 objects collected"}
+{"timestamp": "2026-10-25 14:16:33,887", "module": "main_preds", "level": "INFO", "message": "STEP 3 DONE: Data preprocessing completed"}
+{"timestamp": "2026-10-25 14:16:33,887", "module": "main_preds", "level": "INFO", "message": "STEP 4: Data Merging"}
+{"timestamp": "2026-10-25 14:16:36,600", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after merging: 30 objects collected"}
+{"timestamp": "2026-10-25 14:16:36,600", "module": "main_preds", "level": "INFO", "message": "STEP 4 DONE: Data merging completed"}
+{"timestamp": "2026-10-25 14:16:36,608", "module": "main_preds", "level": "INFO", "message": "STEP 5: Feature Engineering"}
+{"timestamp": "2026-10-25 14:16:53,195", "module": "main_preds", "level": "INFO", "message": "Features saved: (2011728, 108)"}
+{"timestamp": "2026-10-25 14:16:53,279", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after feature_engineering: 0 objects collected"}
+{"timestamp": "2026-10-25 14:16:53,279", "module": "main_preds", "level": "INFO", "message": "STEP 5 DONE: Feature engineering completed"}
+{"timestamp": "2026-10-25 14:16:53,279", "module": "main_preds", "level": "INFO", "message": "STEP 6: Model Training"}
+{"timestamp": "2026-10-25 17:18:27,464", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after training: 14644 objects collected"}
+{"timestamp": "2026-10-25 17:18:27,465", "module": "main_preds", "level": "INFO", "message": "STEP 6 DONE: Model training completed"}
+{"timestamp": "2026-10-25 17:18:27,465", "module": "main_preds", "level": "INFO", "message": "STEP 7: Model Evaluation"}
+{"timestamp": "2026-10-25 17:18:27,466", "module": "main_preds", "level": "INFO", "message": "Evaluation results saved to results\\evaluation_results.json"}
+{"timestamp": "2026-10-25 17:18:27,467", "module": "main_preds", "level": "INFO", "message": "Holdout MAE (Power): 181.2681"}
+{"timestamp": "2026-10-25 17:18:27,521", "module": "main_preds", "level": "INFO", "message": "Memory cleanup after evaluation: 129 objects collected"}
+{"timestamp": "2026-10-25 17:18:27,521", "module": "main_preds", "level": "INFO", "message": "STEP 7 DONE: Evaluation completed"}
+{"timestamp": "2026-10-25 17:18:27,523", "module": "main_preds", "level": "INFO", "message": "STEP 8: MLflow Tracking"}
+{"timestamp": "2026-10-25 17:19:04,970", "module": "main_preds", "level": "INFO", "message": "STEP 8 DONE: Logged to MLflow (run_id: 368464acdc874f4e9d3d01f1b063c9c6)"}
+{"timestamp": "2026-10-25 17:19:04,972", "module": "main_preds", "level": "INFO", "message": "PIPELINE COMPLETED SUCCESSFULLY!"}
+{"timestamp": "2026-10-25 17:19:04,972", "module": "main_preds", "level": "INFO", "message": "Model saved to: ./models/catboost_prosumer"}
+{"timestamp": "2026-10-25 17:19:04,972", "module": "main_preds", "level": "INFO", "message": "Holdout MAE (Power): 181.2681"}

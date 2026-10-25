@@ -33,8 +33,10 @@
 
     - After hyperparameter selection, refit each segment on all pre-holdout data and evaluate once on the test data.
 
-    - Convert predicted capacity_factor to power using installed_capacity,
-      then clip negative predictions to zero.
+    - Fit with sample_weight=installed_capacity so MAE on capacity_factor
+      matches MAE on power.
+    - Clip the predicted capacity_factor to [0, segment upper] before
+      converting it back to power.
 
     Input:
     - Pandas DataFrame with features from FeatureEngineering
@@ -62,6 +64,7 @@ from dotenv import load_dotenv
 from sklearn.base import BaseEstimator, TransformerMixin
 from catboost import CatBoostRegressor as CatBoost, Pool
 import optuna
+from optuna.samplers import TPESampler
 
 from src.logging_setup import setup_logging
 from src.preds.feature_engineering import TARGET_LAG_HOURS
@@ -84,6 +87,9 @@ PROCESSED_DATA_DIR = os.getenv('PROCESSED_DATA_DIR', './data/processed')
 
 # Default hyperparameter search space
 DEFAULT_N_TRIALS = int(os.getenv('OPTUNA_N_TRIALS', 2))
+# Optional wall-clock budget for each Optuna study, in seconds.
+_OPTUNA_TIMEOUT = os.getenv('OPTUNA_TIMEOUT_SECONDS')
+DEFAULT_OPTUNA_TIMEOUT = float(_OPTUNA_TIMEOUT) if _OPTUNA_TIMEOUT else None
 # How many month-long folds to score, counting backwards from the holdout.
 DEFAULT_CV_SPLITS = int(os.getenv('CV_SPLITS', 3))
 # Last two months of the competition window. Optuna never sees these rows.
@@ -97,11 +103,12 @@ DEBUG_PREDICTION_UNITS = [3, 19, 48, 60]
 
 # Target and categorical features
 TARGET = 'capacity_factor'
+# is_consumption is constant inside each segment model, so it is not a feature.
 CAT_FEATURES = [
-    'prediction_unit_id', 'is_consumption', 
-    'county', 'is_business', 'product_type',  
+    'prediction_unit_id',
+    'county', 'is_business', 'product_type',
     'is_holiday', 'is_day_before_holiday',
-    'is_dst_spring_forward', 'is_dst_fall_backward'
+    'is_dst_spring_forward', 'is_dst_fall_backward',
 ]
 
 # Target lags the saved metadata advertises. 12h and 24h are not revealed in time, so they are gone.
@@ -110,6 +117,7 @@ LAG_VALUES = TARGET_LAG_HOURS
 # Columns that identify a row or a fold. None of them is a predictor.
 NON_FEATURE_COLUMNS = [
     'datetime', 'row_id', 'data_block_id', 'date', 'power',
+    'is_consumption',
     'client_block_id', 'electricity_block_id', 'gas_block_id', 'fw_block_id', 'hw_block_id',
 ]
 
@@ -197,6 +205,56 @@ def scaled_tree_count(
     scaled = max(1, int(np.ceil(n_trees * scale)))
     logger.info(f'Tree count scaled from {n_trees} to {scaled} (x{scale:.3f})')
     return scaled
+
+
+def score_functions_for_grow_policy(grow_policy: str) -> List[str]:
+    '''
+        Cosine is not valid with Lossguide. Restrict the search to the legal pairs.
+    '''
+    if grow_policy == 'Lossguide':
+        return ['L2']
+    return ['Cosine', 'L2']
+
+
+def suggest_catboost_params(trial: optuna.Trial, random_state: int) -> dict:
+    '''
+        CatBoost hyperparameters for one Optuna trial.
+
+        Both categoricals use a fixed choice set. Cosine + Lossguide is pruned
+        because Optuna cannot change the score_function space mid-study.
+    '''
+    grow_policy = trial.suggest_categorical(
+        'grow_policy', ['SymmetricTree', 'Depthwise', 'Lossguide']
+    )
+    score_function = trial.suggest_categorical('score_function', ['Cosine', 'L2'])
+    if score_function not in score_functions_for_grow_policy(grow_policy):
+        raise optuna.TrialPruned(
+            f'{score_function} is not valid with grow_policy={grow_policy}'
+        )
+    return {
+        'iterations': trial.suggest_int('iterations', 100, 1000),
+        'depth': trial.suggest_int('depth', 4, 12),
+        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+        'l2_leaf_reg': trial.suggest_float('l2_leaf_reg', 0.01, 10, log=True),
+        'score_function': score_function,
+        # Weighted MAE on capacity_factor equals MAE on power when the weight is capacity.
+        'loss_function': 'MAE',
+        'eval_metric': 'MAE',
+        'grow_policy': grow_policy,
+        'random_seed': random_state,
+        'logging_level': 'Silent',
+    }
+
+
+def capacity_factor_clip_upper(values: pd.Series) -> float:
+    '''
+        Upper clip for predicted capacity_factor: 1.1 times the 99.9th training percentile, at least 1.
+    '''
+    finite = pd.to_numeric(values, errors='coerce').to_numpy(dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return 1.0
+    return float(max(1.0, np.quantile(finite, 0.999) * 1.1))
 
 
 def limit_to_prediction_units(df: pd.DataFrame, units: List[int]) -> pd.DataFrame:
@@ -339,7 +397,7 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         '''
         self.random_state = random_state
         self.target = target
-        self.cat_features = cat_features or CAT_FEATURES
+        self.cat_features = list(cat_features or CAT_FEATURES)
         self.n_trials = n_trials
         self.cv_splits = cv_splits
         self.models_dir = Path(models_dir)
@@ -348,6 +406,7 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         self.prediction_units = list(DEBUG_PREDICTION_UNITS) if debug else None
         # False keeps the tree count early stopping chose, instead of multiplying it by the row ratio.
         self.scale_trees = scale_trees
+        self.optuna_timeout = DEFAULT_OPTUNA_TIMEOUT
         
         # Model components
         self.final_model_cb_consumption = None
@@ -359,6 +418,9 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         self.best_params_production = None
         # Holdout metrics. None until fit() has scored the months it did not train on.
         self.eval_report_ = None
+        # Clip predicted capacity_factor to [0, upper] before converting to power.
+        self.cf_clip_upper_consumption_ = 1.0
+        self.cf_clip_upper_production_ = 1.0
         
         # Create models directory
         self.models_dir.mkdir(parents=True, exist_ok=True)
@@ -373,6 +435,76 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         '''
         excluded = list(NON_FEATURE_COLUMNS) + [self.target]
         return df.columns.difference(excluded)
+
+    def _pool(self, frame: pd.DataFrame, mask: pd.Series = None) -> Pool:
+        '''
+            CatBoost pool with capacity as the sample weight.
+
+            |capacity_factor error| * installed_capacity = |power error|.
+        '''
+        data = frame if mask is None else frame.loc[mask]
+        weights = pd.to_numeric(data['installed_capacity'], errors='coerce').to_numpy(dtype=float)
+        weights = np.where(np.isfinite(weights) & (weights > 0), weights, 0.0)
+        return Pool(
+            data[self.features],
+            data[self.target],
+            cat_features=self.cat_features,
+            weight=weights,
+        )
+
+    def _clip_to_power(
+        self,
+        capacity_pred: np.ndarray,
+        installed_capacity: np.ndarray,
+        is_consumption: np.ndarray,
+    ) -> np.ndarray:
+        '''
+            Clip predicted capacity_factor to [0, segment upper], then convert to power.
+        '''
+        pred = np.asarray(capacity_pred, dtype=float)
+        capacity = np.asarray(installed_capacity, dtype=float)
+        consumption = np.asarray(is_consumption).astype(bool)
+        upper = np.where(consumption, self.cf_clip_upper_consumption_, self.cf_clip_upper_production_)
+        clipped = np.clip(pred, 0, upper)
+        return clipped * np.where(np.isfinite(capacity), np.maximum(capacity, 0), 0)
+
+    def _create_study(self, segment: str) -> optuna.Study:
+        '''
+            Seeded TPE study persisted to SQLite so a later run can continue the same search.
+        '''
+        storage_path = Path(os.getenv('OPTUNA_STORAGE', self.models_dir / 'optuna_studies.db'))
+        storage_path.parent.mkdir(parents=True, exist_ok=True)
+        storage = f'sqlite:///{storage_path.as_posix()}'
+        study_name = f'{segment}_debug{int(self.debug)}_scale{int(self.scale_trees)}'
+        return optuna.create_study(
+            direction='minimize',
+            sampler=TPESampler(seed=self.random_state),
+            storage=storage,
+            study_name=study_name,
+            load_if_exists=True,
+        )
+
+    def _optimize_study(self, study: optuna.Study, objective) -> None:
+        '''
+            Run only the remaining trials, and stop early if a time budget is set.
+        '''
+        n_done = len([
+            trial for trial in study.trials
+            if trial.state == optuna.trial.TrialState.COMPLETE
+        ])
+        n_remain = max(0, self.n_trials - n_done)
+        if n_remain == 0 and self.optuna_timeout is None:
+            logger.info(f'Study {study.study_name} already has {n_done} complete trials')
+            return
+        kwargs = {
+            'show_progress_bar': True,
+            'catch': (Exception,),
+        }
+        if n_remain:
+            kwargs['n_trials'] = n_remain
+        if self.optuna_timeout is not None:
+            kwargs['timeout'] = self.optuna_timeout
+        study.optimize(objective, **kwargs)
 
     def _scaled_iterations(
         self,
@@ -393,17 +525,9 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         es_params = dict(params)
         model = CatBoost(**es_params)
         model.fit(
-            Pool(
-                frame.loc[fit_mask, self.features],
-                frame.loc[fit_mask, self.target],
-                cat_features=self.cat_features,
-            ),
+            self._pool(frame, fit_mask),
             # Inner slice only. The month we report is not in this pool.
-            eval_set=Pool(
-                frame.loc[inner_mask, self.features],
-                frame.loc[inner_mask, self.target],
-                cat_features=self.cat_features,
-            ),
+            eval_set=self._pool(frame, inner_mask),
             early_stopping_rounds=EARLY_STOPPING_ROUNDS,
             # Keep the best inner-slice tree so get_best_iteration is that tree, not the last one.
             use_best_model=True,
@@ -431,19 +555,7 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         '''
         # This frame is already the pre-holdout rows of one segment.
         df_subset = df.loc[mask]
-        params = {
-            'iterations': trial.suggest_int('iterations', 100, 1000),
-            'depth': trial.suggest_int('depth', 4, 12),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
-            'l2_leaf_reg': trial.suggest_float('l2_leaf_reg', 0.01, 10, log=True),
-            'score_function': trial.suggest_categorical('score_function', ['Cosine', 'L2']),
-            # MAE matches the competition metric. The reported number is still power, not capacity factor.
-            'loss_function': 'MAE',
-            'eval_metric': 'MAE',
-            'grow_policy': trial.suggest_categorical('grow_policy', ['SymmetricTree', 'Depthwise', 'Lossguide']),
-            'random_seed': self.random_state,
-            'logging_level': 'Silent'
-        }
+        params = suggest_catboost_params(trial, self.random_state)
 
         fold_stats = []
         for val_start in validation_month_starts(self.cv_splits):
@@ -457,17 +569,17 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             refit_params['iterations'] = n_trees
             model = CatBoost(**refit_params)
             model.fit(
-                Pool(
-                    df_subset.loc[masks['train'], self.features],
-                    df_subset.loc[masks['train'], self.target],
-                    cat_features=self.cat_features,
-                ),
+                self._pool(df_subset, masks['train']),
                 verbose=0,
             )
             val = df_subset.loc[masks['val']]
             capacity_pred = model.predict(val[self.features])
-            # Back to power with the capacity that was on the row, then clip at zero.
-            power_pred = np.maximum(capacity_pred * val['installed_capacity'].to_numpy(), 0)
+            # Clip in capacity-factor space, then convert to power.
+            power_pred = self._clip_to_power(
+                capacity_pred,
+                val['installed_capacity'].to_numpy(),
+                val['is_consumption'].to_numpy(),
+            )
             power_true = (val[self.target] * val['installed_capacity']).to_numpy()
             stats = segment_power_mae(power_true, power_pred, val['is_consumption'].to_numpy())
             stats['val_start'] = str(val_start.date())
@@ -510,7 +622,7 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
         model = CatBoost(**params)
         # No eval_set: there is no scored month left in this frame.
         model.fit(
-            Pool(frame[self.features], frame[self.target], cat_features=self.cat_features),
+            self._pool(frame),
             verbose=100,
         )
         return model, params, study.best_trial.user_attrs['folds']
@@ -533,6 +645,7 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
 
         # Exclude batch id, so the model cannot use the fold key as a feature.
         self.features = self._feature_columns(df)
+        self.cat_features = [col for col in self.cat_features if col in self.features]
         logger.info(f'Features: {len(self.features)}')
 
         # Check if the holdout data is present.
@@ -546,19 +659,23 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             )
         logger.info(f'Pre-holdout rows: {len(tune_df)}. Holdout rows: {len(holdout_df)}')
 
+        mask_consumption = tune_df['is_consumption'] == 1
+        mask_production = tune_df['is_consumption'] == 0
+        self.cf_clip_upper_consumption_ = capacity_factor_clip_upper(tune_df.loc[mask_consumption, self.target])
+        self.cf_clip_upper_production_ = capacity_factor_clip_upper(tune_df.loc[mask_production, self.target])
+        logger.info(
+            f'Capacity-factor clip uppers: consumption {self.cf_clip_upper_consumption_:.4f}, '
+            f'production {self.cf_clip_upper_production_:.4f}'
+        )
+
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         # Perform consumption Optuna study for hyperparameters optimization.
         logger.info('Optimizing consumption model')
-        study_consumption = optuna.create_study(direction='minimize')
-        mask_consumption = tune_df['is_consumption'] == 1
-        study_consumption.optimize(
-            # Objective function for consumption model.
-            # It calculates the MAE for the consumption model for each trial.
-            # It uses the _objective function to calculate the MAE.
+        study_consumption = self._create_study('consumption')
+        self._optimize_study(
+            study_consumption,
             lambda trial: self._objective(trial, df=tune_df, mask=mask_consumption),
-            n_trials=self.n_trials,
-            show_progress_bar=True,
         )
         logger.info(f'Best consumption power MAE: {study_consumption.best_value:.6f}')
         consumption_frame = tune_df.loc[mask_consumption]
@@ -571,15 +688,10 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
 
         # Perform production Optuna study for hyperparameters optimization.
         logger.info('Optimizing production model')
-        study_production = optuna.create_study(direction='minimize')
-        mask_production = tune_df['is_consumption'] == 0
-        study_production.optimize(
-            # Objective function for production model.
-            # It calculates the MAE for the production model for each trial.
-            # It uses the _objective function to calculate the MAE.
+        study_production = self._create_study('production')
+        self._optimize_study(
+            study_production,
             lambda trial: self._objective(trial, df=tune_df, mask=mask_production),
-            n_trials=self.n_trials,
-            show_progress_bar=True,
         )
         logger.info(f'Best production power MAE: {study_production.best_value:.6f}')
         production_frame = tune_df.loc[mask_production]
@@ -615,6 +727,8 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             'debug': self.debug,
             'debug_prediction_units': self.prediction_units,
             'scale_trees': self.scale_trees,
+            'cf_clip_upper_consumption': self.cf_clip_upper_consumption_,
+            'cf_clip_upper_production': self.cf_clip_upper_production_,
         }
         self.eval_report_.update(baselines)
         logger.info(f"Holdout power MAE: {self.eval_report_['holdout_mae_power']:.4f}")
@@ -651,9 +765,12 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             X_test.loc[production_mask, 'predictions'] = \
                 self.final_model_cb_production.predict(X_test.loc[production_mask, self.features])
         
-        # Power = predicted capacity factor times the capacity known for that row, floored at zero.
-        installed_capacity = X_test['installed_capacity'].to_numpy()
-        X_test['target'] = np.maximum(X_test['predictions'].to_numpy() * installed_capacity, 0)
+        # Clip in capacity-factor space, then convert to power.
+        X_test['target'] = self._clip_to_power(
+            X_test['predictions'].to_numpy(),
+            X_test['installed_capacity'].to_numpy(),
+            X_test['is_consumption'].to_numpy(),
+        )
         
         submission = X_test[['row_id', 'target']]
         logger.info(f'DONE: Generated {len(submission)} predictions')
@@ -721,6 +838,8 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             'debug': self.debug,
             'debug_prediction_units': self.prediction_units,
             'scale_trees': self.scale_trees,
+            'cf_clip_upper_consumption': self.cf_clip_upper_consumption_,
+            'cf_clip_upper_production': self.cf_clip_upper_production_,
         }
         with open(model_path / 'metadata.json', 'w') as f:
             json.dump(metadata, f, indent=2)
@@ -775,6 +894,8 @@ class CatBoostRegressorModel(BaseEstimator, TransformerMixin):
             self.prediction_units = metadata.get('debug_prediction_units', list(DEBUG_PREDICTION_UNITS))
         if 'scale_trees' in metadata:
             self.scale_trees = bool(metadata['scale_trees'])
+        self.cf_clip_upper_consumption_ = float(metadata.get('cf_clip_upper_consumption', 1.0))
+        self.cf_clip_upper_production_ = float(metadata.get('cf_clip_upper_production', 1.0))
         
         logger.info(f'Models loaded from {load_path}')
         return self
@@ -890,4 +1011,6 @@ __all__ = [
     'CAT_FEATURES',
     'LAG_VALUES',
     'DEBUG_PREDICTION_UNITS',
+    'suggest_catboost_params',
+    'score_functions_for_grow_policy',
 ]

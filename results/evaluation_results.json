@@ -1,60 +1,60 @@
 {
   "holdout_start": "2023-04-01",
   "holdout_excluded_from_training": true,
-  "holdout_mae_power": 146.20750885032044,
-  "holdout_mae_power_consumption": 174.25355127416714,
-  "holdout_mae_power_production": 118.16146642647372,
+  "holdout_mae_power": 181.26811390240482,
+  "holdout_mae_power_consumption": 235.15166468382813,
+  "holdout_mae_power_production": 127.38456312098154,
   "holdout_n": 11712,
-  "cv_mae_power_consumption": 222.82610992199844,
-  "cv_mae_power_production": 22.57309959897153,
-  "cv_mae_power": 122.69960476048496,
+  "cv_mae_power_consumption": 210.85922904859103,
+  "cv_mae_power_production": 24.175207202045062,
+  "cv_mae_power": 117.51721812531804,
   "cv_folds_consumption": [
     {
-      "mae_power": 303.52762958883255,
-      "mae_power_consumption": 303.52762958883255,
+      "mae_power": 253.6301537913949,
+      "mae_power_consumption": 253.6301537913949,
       "mae_power_production": null,
       "n": 2976,
       "val_start": "2023-01-01"
     },
     {
-      "mae_power": 155.9429127894983,
-      "mae_power_consumption": 155.9429127894983,
+      "mae_power": 165.14451937805342,
+      "mae_power_consumption": 165.14451937805342,
       "mae_power_production": null,
       "n": 2688,
       "val_start": "2023-02-01"
     },
     {
-      "mae_power": 202.48052749735623,
-      "mae_power_consumption": 202.48052749735623,
+      "mae_power": 209.3790098146598,
+      "mae_power_consumption": 209.3790098146598,
       "mae_power_production": null,
-      "n": 2968,
+      "n": 2976,
       "val_start": "2023-03-01"
     }
   ],
   "cv_folds_production": [
     {
-      "mae_power": 5.536530684369795,
+      "mae_power": 5.315502580219222,
       "mae_power_consumption": null,
-      "mae_power_production": 5.536530684369795,
+      "mae_power_production": 5.315502580219222,
       "n": 2976,
       "val_start": "2023-01-01"
     },
     {
-      "mae_power": 12.404203590153358,
+      "mae_power": 15.220305671885978,
       "mae_power_consumption": null,
-      "mae_power_production": 12.404203590153358,
+      "mae_power_production": 15.220305671885978,
       "n": 2688,
       "val_start": "2023-02-01"
     },
     {
-      "mae_power": 48.865155381167625,
+      "mae_power": 51.12320998014361,
       "mae_power_consumption": null,
-      "mae_power_production": 48.865155381167625,
-      "n": 2968,
+      "mae_power_production": 51.12320998014361,
+      "n": 2976,
       "val_start": "2023-03-01"
     }
   ],
-  "n_train_samples": 107680,
+  "n_train_samples": 110400,
   "n_trials": 10,
   "debug": true,
   "debug_prediction_units": [
@@ -64,13 +64,15 @@
     60
   ],
   "scale_trees": false,
+  "cf_clip_upper_consumption": 2.6526961623412477,
+  "cf_clip_upper_production": 1.0,
   "baseline_lag_48_mae_power": 307.8117755293716,
   "baseline_lag_48_mae_power_consumption": 431.4243464822405,
   "baseline_lag_48_mae_power_production": 184.19920457650272,
   "baseline_lag_48_n": 11712,
-  "baseline_lag_168_mae_power": 194.49670870383036,
-  "baseline_lag_168_mae_power_consumption": 227.6438493502052,
-  "baseline_lag_168_mae_power_production": 161.34956805745554,
-  "baseline_lag_168_n": 11696,
+  "baseline_lag_168_mae_power": 194.65016376366123,
+  "baseline_lag_168_mae_power_consumption": 228.1663362363388,
+  "baseline_lag_168_mae_power_production": 161.1339912909836,
+  "baseline_lag_168_n": 11712,
   "model_name": "catboost_prosumer"
 }

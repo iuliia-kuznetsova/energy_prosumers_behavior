@@ -102,3 +102,125 @@
 {"timestamp": "2026-10-25 03:13:21,214", "module": "modelling_catboost", "level": "INFO", "message": "Baseline lag-168 power MAE: 194.4967"}
 {"timestamp": "2026-10-25 03:13:21,214", "module": "modelling_catboost", "level": "INFO", "message": "DONE: Model training completed"}
 {"timestamp": "2026-10-25 03:13:21,239", "module": "modelling_catboost", "level": "INFO", "message": "Models saved to models\\catboost_prosumer"}
+{"timestamp": "2026-10-25 12:25:03,182", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-25 12:25:04,849", "module": "modelling_catboost", "level": "WARNING", "message": "Debug prediction_unit_id values not in the frame: [60]"}
+{"timestamp": "2026-10-25 12:25:04,849", "module": "modelling_catboost", "level": "INFO", "message": "Debug mode: 4 rows for prediction_unit_id [3, 19, 48] (dropped 1 rows)"}
+{"timestamp": "2026-10-25 12:25:04,890", "module": "modelling_catboost", "level": "INFO", "message": "Tree count scaled from 10 to 15 (x1.500)"}
+{"timestamp": "2026-10-25 12:25:04,890", "module": "modelling_catboost", "level": "INFO", "message": "Tree count scaled from 50 to 75 (x1.500)"}
+{"timestamp": "2026-10-25 12:25:04,890", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 10"}
+{"timestamp": "2026-10-25 12:25:04,890", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 50"}
+{"timestamp": "2026-10-25 13:46:58,367", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "modelling_catboost", "level": "INFO", "message": "CatBoostRegressorModel initialized"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "modelling_catboost", "level": "INFO", "message": "Target: capacity_factor, Categorical features: 8"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "modelling_catboost", "level": "INFO", "message": "Debug units: [3, 19, 48, 60]. Scale trees: False"}
+{"timestamp": "2026-10-25 13:47:20,538", "module": "modelling_catboost", "level": "INFO", "message": "Starting model training"}
+{"timestamp": "2026-10-25 13:47:20,740", "module": "modelling_catboost", "level": "INFO", "message": "Debug mode: 122112 rows for prediction_unit_id [3, 19, 48, 60] (dropped 1889616 rows)"}
+{"timestamp": "2026-10-25 13:47:20,740", "module": "modelling_catboost", "level": "INFO", "message": "Features: 103"}
+{"timestamp": "2026-10-25 13:47:20,809", "module": "modelling_catboost", "level": "INFO", "message": "Pre-holdout rows: 110400. Holdout rows: 11712"}
+{"timestamp": "2026-10-25 13:47:20,815", "module": "modelling_catboost", "level": "INFO", "message": "Capacity-factor clip uppers: consumption 2.6527, production 1.0000"}
+{"timestamp": "2026-10-25 13:47:20,815", "module": "modelling_catboost", "level": "INFO", "message": "Optimizing consumption model"}
+{"timestamp": "2026-10-25 13:50:12,744", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 365"}
+{"timestamp": "2026-10-25 13:56:31,881", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 561"}
+{"timestamp": "2026-10-25 14:03:59,844", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 538"}
+{"timestamp": "2026-10-25 14:07:34,450", "module": "modelling_catboost", "level": "INFO", "message": "Trial 1: power MAE = 259.826176"}
+{"timestamp": "2026-10-25 14:10:00,379", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 110"}
+{"timestamp": "2026-10-25 14:12:47,242", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 55"}
+{"timestamp": "2026-10-25 14:14:17,016", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 76"}
+{"timestamp": "2026-10-25 14:15:21,189", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-25 14:16:32,503", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-25 14:16:53,285", "module": "modelling_catboost", "level": "INFO", "message": "CatBoostRegressorModel initialized"}
+{"timestamp": "2026-10-25 14:16:53,285", "module": "modelling_catboost", "level": "INFO", "message": "Target: capacity_factor, Categorical features: 8"}
+{"timestamp": "2026-10-25 14:16:53,285", "module": "modelling_catboost", "level": "INFO", "message": "Debug units: [3, 19, 48, 60]. Scale trees: False"}
+{"timestamp": "2026-10-25 14:16:53,285", "module": "modelling_catboost", "level": "INFO", "message": "Starting model training"}
+{"timestamp": "2026-10-25 14:16:53,468", "module": "modelling_catboost", "level": "INFO", "message": "Debug mode: 122112 rows for prediction_unit_id [3, 19, 48, 60] (dropped 1889616 rows)"}
+{"timestamp": "2026-10-25 14:16:53,474", "module": "modelling_catboost", "level": "INFO", "message": "Features: 103"}
+{"timestamp": "2026-10-25 14:16:53,538", "module": "modelling_catboost", "level": "INFO", "message": "Pre-holdout rows: 110400. Holdout rows: 11712"}
+{"timestamp": "2026-10-25 14:16:53,547", "module": "modelling_catboost", "level": "INFO", "message": "Capacity-factor clip uppers: consumption 2.6527, production 1.0000"}
+{"timestamp": "2026-10-25 14:16:53,547", "module": "modelling_catboost", "level": "INFO", "message": "Optimizing consumption model"}
+{"timestamp": "2026-10-25 14:21:07,119", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 112"}
+{"timestamp": "2026-10-25 14:27:27,692", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 71"}
+{"timestamp": "2026-10-25 14:32:28,256", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 69"}
+{"timestamp": "2026-10-25 14:34:17,188", "module": "modelling_catboost", "level": "INFO", "message": "Trial 7: power MAE = 327.877473"}
+{"timestamp": "2026-10-25 14:41:05,384", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 415"}
+{"timestamp": "2026-10-25 14:50:59,261", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 209"}
+{"timestamp": "2026-10-25 14:58:38,905", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 194"}
+{"timestamp": "2026-10-25 15:02:01,457", "module": "modelling_catboost", "level": "INFO", "message": "Trial 8: power MAE = 210.859229"}
+{"timestamp": "2026-10-25 15:02:25,106", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 120"}
+{"timestamp": "2026-10-25 15:03:11,363", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 120"}
+{"timestamp": "2026-10-25 15:03:58,404", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 120"}
+{"timestamp": "2026-10-25 15:04:22,217", "module": "modelling_catboost", "level": "INFO", "message": "Trial 9: power MAE = 310.351546"}
+{"timestamp": "2026-10-25 15:12:09,876", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 920"}
+{"timestamp": "2026-10-25 15:22:03,265", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 920"}
+{"timestamp": "2026-10-25 15:29:36,664", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 920"}
+{"timestamp": "2026-10-25 15:33:26,498", "module": "modelling_catboost", "level": "INFO", "message": "Trial 10: power MAE = 268.427520"}
+{"timestamp": "2026-10-25 15:40:55,615", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 222"}
+{"timestamp": "2026-10-25 15:49:04,223", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 391"}
+{"timestamp": "2026-10-25 15:58:48,953", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 255"}
+{"timestamp": "2026-10-25 16:01:51,534", "module": "modelling_catboost", "level": "INFO", "message": "Trial 11: power MAE = 225.092177"}
+{"timestamp": "2026-10-25 16:02:08,851", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 153"}
+{"timestamp": "2026-10-25 16:02:48,340", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 338"}
+{"timestamp": "2026-10-25 16:03:46,205", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 340"}
+{"timestamp": "2026-10-25 16:04:14,780", "module": "modelling_catboost", "level": "INFO", "message": "Trial 12: power MAE = 338.861652"}
+{"timestamp": "2026-10-25 16:07:49,073", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 208"}
+{"timestamp": "2026-10-25 16:15:17,967", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 207"}
+{"timestamp": "2026-10-25 16:22:31,170", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 209"}
+{"timestamp": "2026-10-25 16:26:02,620", "module": "modelling_catboost", "level": "INFO", "message": "Trial 13: power MAE = 232.085459"}
+{"timestamp": "2026-10-25 16:26:11,351", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 78"}
+{"timestamp": "2026-10-25 16:26:24,394", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 73"}
+{"timestamp": "2026-10-25 16:26:40,888", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 131"}
+{"timestamp": "2026-10-25 16:26:49,507", "module": "modelling_catboost", "level": "INFO", "message": "Trial 15: power MAE = 251.373253"}
+{"timestamp": "2026-10-25 16:26:49,529", "module": "modelling_catboost", "level": "INFO", "message": "Best consumption power MAE: 210.859229"}
+{"timestamp": "2026-10-25 16:28:26,029", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 221"}
+{"timestamp": "2026-10-25 16:29:38,336", "module": "modelling_catboost", "level": "INFO", "message": "Best consumption params: {'grow_policy': 'Lossguide', 'score_function': 'L2', 'iterations': 221, 'depth': 6, 'learning_rate': 0.030773951852732604, 'l2_leaf_reg': 0.011818408172830159, 'loss_function': 'MAE', 'eval_metric': 'MAE', 'random_seed': 3112, 'logging_level': 'Silent'}"}
+{"timestamp": "2026-10-25 16:29:38,336", "module": "modelling_catboost", "level": "INFO", "message": "Optimizing production model"}
+{"timestamp": "2026-10-25 16:30:14,731", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 1"}
+{"timestamp": "2026-10-25 16:30:49,877", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 4"}
+{"timestamp": "2026-10-25 16:31:26,791", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 2"}
+{"timestamp": "2026-10-25 16:31:28,748", "module": "modelling_catboost", "level": "INFO", "message": "Trial 1: power MAE = 26.416676"}
+{"timestamp": "2026-10-25 16:32:51,005", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 171"}
+{"timestamp": "2026-10-25 16:36:31,598", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 383"}
+{"timestamp": "2026-10-25 16:39:18,213", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 4"}
+{"timestamp": "2026-10-25 16:39:20,637", "module": "modelling_catboost", "level": "INFO", "message": "Trial 2: power MAE = 28.923158"}
+{"timestamp": "2026-10-25 16:39:24,325", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 1"}
+{"timestamp": "2026-10-25 16:39:28,917", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 5"}
+{"timestamp": "2026-10-25 16:39:33,632", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 3"}
+{"timestamp": "2026-10-25 16:39:34,468", "module": "modelling_catboost", "level": "INFO", "message": "Trial 3: power MAE = 27.544424"}
+{"timestamp": "2026-10-25 16:39:59,814", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 72"}
+{"timestamp": "2026-10-25 16:40:39,159", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 47"}
+{"timestamp": "2026-10-25 16:41:06,921", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 29"}
+{"timestamp": "2026-10-25 16:41:13,154", "module": "modelling_catboost", "level": "INFO", "message": "Trial 4: power MAE = 25.338896"}
+{"timestamp": "2026-10-25 16:45:34,293", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 259"}
+{"timestamp": "2026-10-25 16:51:52,694", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 196"}
+{"timestamp": "2026-10-25 16:54:52,798", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 17"}
+{"timestamp": "2026-10-25 16:55:05,395", "module": "modelling_catboost", "level": "INFO", "message": "Trial 5: power MAE = 24.175207"}
+{"timestamp": "2026-10-25 16:55:17,522", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 97"}
+{"timestamp": "2026-10-25 16:55:32,745", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 31"}
+{"timestamp": "2026-10-25 16:55:41,250", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 10"}
+{"timestamp": "2026-10-25 16:55:42,723", "module": "modelling_catboost", "level": "INFO", "message": "Trial 6: power MAE = 28.689187"}
+{"timestamp": "2026-10-25 16:59:29,568", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 211"}
+{"timestamp": "2026-10-25 17:07:20,504", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 211"}
+{"timestamp": "2026-10-25 17:11:44,961", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 9"}
+{"timestamp": "2026-10-25 17:11:55,595", "module": "modelling_catboost", "level": "INFO", "message": "Trial 7: power MAE = 26.470845"}
+{"timestamp": "2026-10-25 17:11:59,711", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 1"}
+{"timestamp": "2026-10-25 17:12:05,948", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 6"}
+{"timestamp": "2026-10-25 17:12:12,026", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 1"}
+{"timestamp": "2026-10-25 17:12:13,185", "module": "modelling_catboost", "level": "INFO", "message": "Trial 9: power MAE = 28.423187"}
+{"timestamp": "2026-10-25 17:12:21,500", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 17"}
+{"timestamp": "2026-10-25 17:12:33,823", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 26"}
+{"timestamp": "2026-10-25 17:12:44,479", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 6"}
+{"timestamp": "2026-10-25 17:12:46,336", "module": "modelling_catboost", "level": "INFO", "message": "Trial 10: power MAE = 25.746763"}
+{"timestamp": "2026-10-25 17:12:46,547", "module": "modelling_catboost", "level": "INFO", "message": "Best production power MAE: 24.175207"}
+{"timestamp": "2026-10-25 17:15:52,992", "module": "modelling_catboost", "level": "INFO", "message": "Tree count left unscaled at 220"}
+{"timestamp": "2026-10-25 17:18:26,241", "module": "modelling_catboost", "level": "INFO", "message": "Best production params: {'grow_policy': 'Depthwise', 'score_function': 'L2', 'iterations': 220, 'depth': 11, 'learning_rate': 0.035470256851259485, 'l2_leaf_reg': 0.07966266910506997, 'loss_function': 'MAE', 'eval_metric': 'MAE', 'random_seed': 3112, 'logging_level': 'Silent'}"}
+{"timestamp": "2026-10-25 17:18:26,696", "module": "modelling_catboost", "level": "INFO", "message": "Debug mode: 11712 rows for prediction_unit_id [3, 19, 48, 60] (dropped 0 rows)"}
+{"timestamp": "2026-10-25 17:18:26,879", "module": "modelling_catboost", "level": "INFO", "message": "DONE: Generated 11712 predictions"}
+{"timestamp": "2026-10-25 17:18:26,945", "module": "modelling_catboost", "level": "INFO", "message": "Power MAE: 181.2681 (consumption 235.15166468382813, production 127.38456312098154)"}
+{"timestamp": "2026-10-25 17:18:27,214", "module": "modelling_catboost", "level": "INFO", "message": "Holdout power MAE: 181.2681"}
+{"timestamp": "2026-10-25 17:18:27,215", "module": "modelling_catboost", "level": "INFO", "message": "Baseline lag-48 power MAE: 307.8118"}
+{"timestamp": "2026-10-25 17:18:27,215", "module": "modelling_catboost", "level": "INFO", "message": "Baseline lag-168 power MAE: 194.6502"}
+{"timestamp": "2026-10-25 17:18:27,215", "module": "modelling_catboost", "level": "INFO", "message": "DONE: Model training completed"}
+{"timestamp": "2026-10-25 17:18:27,260", "module": "modelling_catboost", "level": "INFO", "message": "Models saved to models\\catboost_prosumer"}
+{"timestamp": "2026-10-25 20:16:20,388", "module": "modelling_catboost", "level": "INFO", "message": "Logging to C:\\Users\\iulii\\Documents\\Pet Projects\\energy_prosumers_behavior\\logs\\logs_modelling_catboost.json setup completed"}
+{"timestamp": "2026-10-25 20:16:20,395", "module": "modelling_catboost", "level": "INFO", "message": "CatBoostRegressorModel initialized"}
+{"timestamp": "2026-10-25 20:16:20,395", "module": "modelling_catboost", "level": "INFO", "message": "Target: capacity_factor, Categorical features: 8"}
+{"timestamp": "2026-10-25 20:16:20,395", "module": "modelling_catboost", "level": "INFO", "message": "Debug units: None. Scale trees: True"}

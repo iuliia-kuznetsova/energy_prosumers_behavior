@@ -1,223 +1,95 @@
 # Predict Energy Behavior of Prosumers
-Predict energy consumption and production patterns of prosumers (consumers who also produce energy) in Estonia to minimize energy imbalance costs for energy companies.
-Solution to the Kaggle competition [Enefit - Predict Energy Behavior of Prosumers](https://www.kaggle.com/competitions/predict-energy-behavior-of-prosumers).
 
+Forecast hourly **consumption** and **production** of Estonian energy prosumers so imbalance costs stay low.
 
-## Problem Statement
-### Business Context
-Energy companies face significant costs from energy imbalance — the difference between predicted and actual energy usage. Prosumers, who both consume and produce energy, make forecasting especially challenging because their behavior depends on weather, time of day, installed solar capacity, and other factors.
+Competition: [Enefit — Predict Energy Behavior of Prosumers](https://www.kaggle.com/competitions/predict-energy-behavior-of-prosumers).  
+Metric: **MAE on power**.
 
-### ML Objective
-Build a model that predicts hourly energy consumption and production (in power units) for each prosumer segment, evaluated by **Mean Absolute Error (MAE)**.
+---
 
-Strategy:
-- Train two separate **CatBoost** regressors — one for consumption, one for production
-- Use `capacity_factor = power / installed_capacity` as the target variable during training
-- Convert predictions back to power by multiplying with `installed_capacity`
-- Optimize hyperparameters with **Optuna** and **TimeSeriesSplit** cross-validation
+## Task
 
+A *prediction unit* is a segment of prosumers (`county`, `is_business`, `product_type`). For every hour the model must output two power values: consumption and production.
 
-## High-Level Solution Architecture
+Kaggle revealed data **day by day**. Features used in training must match what is available at forecast time:
 
-```
-┌─────────────────────┐
-│   DataPreparation   │  → Schema validation & type conversion
-└─────────┬───────────┘
-          │
-┌─────────▼───────────┐
-│    DataMerging      │  → Join all datasets on appropriate keys
-└─────────┬───────────┘
-          │
-┌─────────▼───────────┐
-│ FeatureEngineering  │  → Create temporal, lag & weather features
-└─────────┬───────────┘
-          │
-┌─────────▼───────────┐
-│  CatBoostRegressor  │  → Train/Predict with Optuna optimization
-└─────────────────────┘
-```
+| Information | Latest value when predicting day D |
+|---|---|
+| Target (revealed power) | all hours of D−2 (48 h) |
+| Client capacity and `eic_count` | date D−2 |
+| Electricity and gas prices | D−1 |
+| Observed weather | shifted 48 h |
+| Weather forecast | the day-ahead issue for day D |
 
+The training target is `capacity_factor = power / installed_capacity`. Predictions are converted back to power and clipped in capacity-factor space.
 
-## Project Structure
+---
 
-```
-energy_prosumers_behavior/
-├── Enefit.ipynb                    # Original Kaggle notebook
-├── README.md                       # This file
-├── .env                            # Environment variables
-├── requirements.txt                # Python dependencies
-├── start_mlflow_server.ps1         # Local MLflow server (Windows)
-├── start_mlflow_server.sh          # Local MLflow server (Git Bash / WSL / Linux)
-│
-├── src/
-│   ├── logging_setup.py            # Logging configuration
-│   └── preds/
-│       ├── main_preds.py           # Main orchestrator
-│       ├── data_loading.py         # Download from Kaggle
-│       ├── data_preprocessing.py   # DataPreparation class
-│       ├── data_merging.py         # DataMerging class
-│       ├── feature_engineering.py  # FeatureEngineering class
-│       ├── modelling_catboost.py   # CatBoostRegressorModel class
-│       └── mlflow_logging.py       # MLflow experiment tracking
-│
-├── data/
-│   ├── raw/                        # Raw CSV files from Kaggle
-│   └── preprocessed/               # Intermediate processed data
-│
-├── models/                         # Saved trained models
-│   └── catboost_prosumer/
-│       ├── consumption.cbm
-│       ├── production.cbm
-│       └── metadata.json
-│
-├── results/                        # Evaluation results
-│   └── evaluation_results.json
-│
-└── logs/                           # Log files
+## Solution, by step
+
+`python -m src.preds.main_preds` runs the full pipeline.
+
+| Step | What it does | Details |
+|---|---|---|
+| 1. Load | Download or verify the 7 Kaggle CSVs in `data/raw` | [readme_data_loading.md](readme_data_loading.md) |
+| 2. Preprocess | Check columns, parse dates, cast dtypes | [readme_data_preprocessing.md](readme_data_preprocessing.md) |
+| 3. Merge | Join capacity, prices and weather onto each power hour; build `capacity_factor` | [readme_data_merging.md](readme_data_merging.md) |
+| 4. Features | Calendar, lags, solar position, missing-value flags | [readme_feature_engineering.md](readme_feature_engineering.md) |
+| 5. Train | Two CatBoost models (consumption, production), Optuna, April–May 2023 holdout | [readme_modelling.md](readme_modelling.md) |
+| 6. Track | Log parameters, holdout MAE and both models to local MLflow | [readme_mlflow_logging.md](readme_mlflow_logging.md) |
+
+```text
+data/raw/*.csv
+    → preprocess  → merge  → features
+    → CatBoost consumption + production
+    → models/<name>/{consumption.cbm, production.cbm, metadata.json}
+    → results/evaluation_results.json
+    → MLflow (optional)
 ```
 
+---
 
-## Libraries
-- **Polars** — high-performance data manipulation
-- **Pandas** — data manipulation and CatBoost compatibility
-- **NumPy** — numerical computations
-- **CatBoost** — gradient boosting regression
-- **Scikit-learn** — pipeline utilities and cross-validation
-- **Optuna** — hyperparameter optimization
-- **Holidays** — Estonian public holiday calendar
-- **Kaggle** — competition data download
-- **MLflow** — local experiment tracking (SQLite + disk artifacts)
-- **python-dotenv** — environment variable management
+## Virtual environment
 
+From the project root:
 
-## Data
-The dataset contains public data from the Kaggle competition and is used for educational purposes only.
-
-### Download Links
-The data can be downloaded automatically via Kaggle API or manually from the competition page and placed into `./data/raw` directory:
-- [Enefit - Predict Energy Behavior of Prosumers](https://www.kaggle.com/competitions/predict-energy-behavior-of-prosumers/data)
-
-### Dataset Descriptions
-| File | Description |
-|------|-------------|
-| `train.csv` | Hourly energy consumption/production records per prosumer segment |
-| `client.csv` | Client metadata including installed capacity and EIC count |
-| `electricity_prices.csv` | Hourly electricity prices (euros per MWh) |
-| `gas_prices.csv` | Daily gas price ranges (lowest/highest per MWh) |
-| `historical_weather.csv` | Observed weather data (temperature, pressure, wind, solar radiation) |
-| `forecast_weather.csv` | Weather forecasts (temperature, cloud cover, wind, solar radiation) |
-| `weather_station_to_county_mapping.csv` | Mapping between weather stations and Estonian counties |
-
-
-## Quick Start
-1. Clone the repository
-   ```bash
-   git clone https://github.com/iuliia-kuznetsova/energy_prosumers_behavior.git
-   cd energy_prosumers_behavior
-   ```
-
-2. Prepare virtual environment
-
-    Create virtual environment
-    ```bash
-    python3 -m venv venv_enefit
-    ```
-    Activate virtual environment
-    ```bash
-    source venv_enefit/bin/activate
-    ```  # Linux/Mac
-
-    or
-
-    ```bash
-    .\venv_enefit\Scripts\activate
-    ```   # Windows
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Download the data (see Data section) and place it in `./data/raw` directory, or configure Kaggle API credentials:
-   ```bash
-   # Option A: Create ~/.kaggle/kaggle.json with {"username":"xxx","key":"xxx"}
-   # Option B: Set environment variables in .env (see env.template)
-   ```
-
-5. Start the local MLflow server (optional, keep this terminal open):
-```powershell
-.\start_mlflow_server.ps1
-```
 ```bash
-bash start_mlflow_server.sh
+python -m venv venv_enefit
 ```
-UI: http://127.0.0.1:5000 — see [MLflow Experiment Tracking](#mlflow-experiment-tracking).
 
-6. Run the ML pipeline:
+Activate it:
+
 ```bash
-# Full pipeline (download, preprocess, train, evaluate, log to MLflow)
+# Linux / macOS / Git Bash
+source venv_enefit/bin/activate
+
+# Windows PowerShell
+.\venv_enefit\Scripts\activate
+```
+
+Install packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+Put Kaggle credentials in `~/.kaggle/kaggle.json`, or set `KAGGLE_USERNAME` and `KAGGLE_KEY`. Then:
+
+```bash
 python -m src.preds.main_preds
-
-# Skip data download if files are already in data/raw
-python -m src.preds.main_preds --skip-download
-
-# Skip model training (load an existing model). Does not log to MLflow.
-python -m src.preds.main_preds --skip-training
-
-# Custom number of Optuna trials and MLflow run name
-python -m src.preds.main_preds --n-trials 20 --mlflow-run-name my_run
-
-# Train without sending anything to MLflow
-python -m src.preds.main_preds --no-mlflow
+python -m src.preds.main_preds --skip-download    # CSVs already in data/raw
+python -m src.preds.main_preds --debug            # four prediction units only
+python -m src.preds.main_preds --no-tree-scale    # do not scale the tree count
+python -m src.preds.main_preds --no-mlflow        # train without tracking
 ```
 
-7. Stopping services
-```bash
-# Stop the MLflow server: Ctrl+C in its terminal
-deactivate
-```
+---
 
+## MLflow logging
 
-## Approach
-1. **Data Loading**:
-   - Automated download from Kaggle API with file verification
-2. **Data Preprocessing**:
-   - Schema validation and type conversion for all datasets
-   - Mode-aware processing (train / retrain / test)
-3. **Data Merging**:
-   - Joining power, client, electricity prices, gas prices, forecast weather, and historical weather into a unified DataFrame via county mapping
-   - Computing the target as `capacity_factor = power / installed_capacity`
-4. **Feature Engineering**:
-   - Cyclical datetime encoding (hour, day, day-of-week, month, year as sin/cos)
-   - Estonian holiday and day-before-holiday flags
-   - Daylight saving time transition flags
-   - Lag features (12 h, 24 h, 1 week, 30 days) for capacity factor, prices, and weather
-   - Forward-fill missing values per prediction unit
-5. **Model Training and Hyperparameter Optimization**:
-   - Separate CatBoost regressors for energy consumption and production 
-   - Optuna search (iterations, depth, learning rate, L2 regularization, score function, grow policy)
-   - TimeSeriesSplit cross-validation (3 folds) with MAE loss
-6. **Prediction and Evaluation**:
-   - Recursive forecasting with lag feature updates
-   - Batch prediction mode when recursive updates are not needed
-   - MAE evaluation on power (`capacity_factor × installed_capacity`)
-7. **MLflow Logging**:
-   - After training, parameters, holdout / CV metrics, and both CatBoost models are sent to a local tracking server (see [MLflow Experiment Tracking](#mlflow-experiment-tracking))
+The tracking server is local: SQLite (`mlflow.db`) and files on disk (`mlartifacts/`). No Docker or cloud account.
 
-
-## MLflow Experiment Tracking
-
-A local MLflow tracking server stores experiment metadata in SQLite (`mlflow.db`) and model files on disk (`mlartifacts/`). No Docker, PostgreSQL, AWS, or paid account is required.
-
-| What | Where |
-|------|--------|
-| Tracking URI | `http://127.0.0.1:5000` (`MLFLOW_TRACKING_URI` in `.env`) |
-| Experiment name | `energy_prosumers_catboost` (`MLFLOW_EXPERIMENT_NAME` in `.env`) |
-| Metadata | `./mlflow.db` |
-| Artifacts | `./mlartifacts/` |
-| UI | http://127.0.0.1:5000 |
-
-Start the server from the project root and leave that terminal running:
+1. Start the server from the project root and leave that terminal open:
 
 ```powershell
 .\start_mlflow_server.ps1
@@ -227,78 +99,32 @@ Start the server from the project root and leave that terminal running:
 bash start_mlflow_server.sh
 ```
 
-Check that the client can reach it:
+2. Check that the client can reach it (UI: http://127.0.0.1:5000):
 
 ```bash
 python -m src.preds.mlflow_logging --check
 ```
 
-### What a run logs
-
-After a successful `fit()`, step 8 of `main_preds` calls `log_catboost_model_to_mlflow` and writes:
-
-- **Parameters** — target, random seed, Optuna trial count, CV splits, debug / scale-trees flags, and the best CatBoost hyperparameters for each segment
-- **Metrics** — holdout power MAE (overall, consumption, production), rolling-origin CV MAE, lag-48 / lag-168 baselines, and per-fold CV MAE
-- **Models** — `consumption` and `production` CatBoost models, plus the raw `.cbm` files under the `models/` artifact folder
-- **Artifacts** — `eval_report.json`, `features.json`, and feature-importance CSVs
-
-If the server is down, training still finishes and the model is saved under `models/`. Reloading with `--skip-training` does not log again.
-
-### Log a model you already saved
+3. A full `main_preds` run logs the trained models after step 5. To log a model that is already saved:
 
 ```bash
 python -m src.preds.mlflow_logging --model-name catboost_prosumer --run-name my_run
 ```
 
-Or from Python after `fit()` / `load()`:
+If the server is down, training still finishes and the model is written under `models/`. See [readme_mlflow_logging.md](readme_mlflow_logging.md).
 
-```python
-from src.preds.mlflow_logging import log_catboost_model_to_mlflow
+---
 
-run_id = log_catboost_model_to_mlflow(
-    model=trained_model,
-    X_sample=train_df,
-    run_name='my_run',
-)
-```
+## Pros of the solution
 
-`mlflow.db`, `mlartifacts/`, and `mlruns/` are gitignored.
+- **Separate consumption and production models** — the two regimes have different daily shapes and weather sensitivity; `is_consumption` is not forced into one tree.
+- **Capacity factor as the target** — `power / installed_capacity` makes large and small units comparable. Training uses capacity as the sample weight, so the loss matches MAE on power. Predictions are clipped in capacity-factor space, then converted back.
+- **Features follow the reveal rules** — target lags start at 48 h; capacity is two days old; prices are from D−1; observed weather is shifted 48 h; the forecast is the day-ahead issue. The model cannot train on values it would not have at forecast time.
+- **Honest validation** — Optuna scores month-long rolling-origin folds (January–March 2023). April–May 2023 is a holdout that never enters tuning, early stopping or the final fit. Lag-48 and lag-168 baselines sit next to that score.
+- **Time encodings that respect cycles and trend** — hour, weekday and month are sin/cos so 23:00 is next to 00:00; `months_since_start` carries growth instead of treating year as a cycle.
+- **Signed prices and solar geometry** — negative day-ahead prices stay negative (oversupply hours). County-level solar elevation, azimuth, clear-sky GHI and `forecast GHI × capacity` give the physical production scale.
+- **Local experiment tracking** — parameters, holdout MAE and both CatBoost models go to a local MLflow server. Training still finishes if the server is down.
 
+---
 
-## Results
-
-| Metric | Value |
-|--------|-------|
-| Train MAE (Power) | TBD |
-| Public LB Score | TBD |
-| Private LB Score | TBD |
-
-
-## Pros of my solution
-- **Separate models for consumption and production** — captures their distinct behavioral patterns instead of forcing a single model to learn both
-- **Capacity factor as target** — normalizing by installed capacity makes predictions comparable across prosumer segments of different sizes
-- **Cyclical encoding of time features** — sin/cos encoding preserves continuity (e.g. hour 23 is close to hour 0), unlike one-hot or ordinal encoding
-- **Rich multi-source feature set** — combines electricity prices, gas prices, forecast weather, historical weather, and calendar effects in a single model
-- **Type safety** — explicit schema definitions ensure data consistency across all pipeline stages
-- **Estonian-specific calendar** — public holidays and day-before-holiday flags improve local prediction accuracy
-- **DST awareness** — handling daylight saving time transitions prevents errors during March/October clock shifts
-- **Temporal cross-validation** — TimeSeriesSplit respects chronological order, preventing data leakage from future observations
-- **Modular sklearn-compatible pipeline** — each step (preprocessing, merging, feature engineering, modelling) is a standalone transformer, easy to test and swap
-- **Recursive forecasting** — lag features are updated row-by-row during inference so predictions feed into subsequent forecasts, matching real-world sequential deployment
-- **Batch prediction fallback** — when recursive updates are not needed, vectorized batch prediction runs significantly faster
-
-
-## Further Improvements
-Currently working on:
-- Creation of derived weather features (wind chill, heat index, "feels like" temperature);
-- Implementation of feature importance analysis;
-- Implementation of target encoding for categorical features;
-- Explicit outlier handling for extreme values;
-- Increasage of Optuna trials to 50–100 for better hyperparameter search;
-- Usage of neural network architectures - Temporal Fusion Transformer, Autoregressive RNN, N-HiTS / N-BEATS, Patch Time Series Transformer, LSTM or Temporal Convolutional Network;
-- Ensembling of gradient boosting model and  neural network in order to differently learn data patterns.
-
-
-## Author
 **Iuliia Kuznetsova**
-March 2026
